@@ -400,3 +400,8 @@ dialog[open] { animation: sheet .4s var(--ease); }
 .dchip { display: inline-block; min-width: 42px; font-family: var(--num); font-size: 13px; color: var(--muted); font-weight: 400; }
 .ev-salary .t { color: var(--mauve-ink); font-weight: 600; }
 .ev-salary { background: var(--mauve-mist); margin-inline: -22px; padding-inline: 22px; }
+
+.weeks td, .weeks th { padding: 10px 6px; font-size: 14px; }
+.weeks tr.low td { background: #FBF0EC; }
+.weeks .muted-col { color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .weeks .hide-sm { display: none; } }
