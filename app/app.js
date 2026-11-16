@@ -444,22 +444,29 @@
   function renderFlow() {
     const r = moneyFlow(currentMonth);
     const per100 = (v) => (r.gross ? Math.round((v / r.gross) * 100) : 0);
+    const c = calc(currentMonth), g = state.goals[currentMonth];
+    const unexplained = !r.hasAccount && r.left > 0;
+    const partial = currentMonth === monthOf(todayISO());
+    const goalHtml = g && g.goal ? (() => {
+      const ratio = c.gross / g.goal, gap = Math.max(0, g.goal - c.gross), daily = g.remaining > 0 && gap ? gap / g.remaining : null;
+      return `<div class="hero-goal"><div class="hbar" role="progressbar" aria-valuenow="${Math.round(ratio * 100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100, ratio * 100)}%"></i></div>
+        <div class="hero-goal-t">${Math.round(ratio * 100)}% מהיעד של ${fmt(g.goal)}${gap ? ` · חסרים ${fmt(gap)}` : " · היעד הושג"}${daily ? ` · ${fmt(daily)} ליום עבודה` : ""}</div></div>`;
+    })() : `<div class="hero-goal-t">עוד לא נקבע יעד לחודש הזה</div>`;
+    $("#monthHero").innerHTML = `
+      <div class="hero-k">הכנסות ב${monthName(currentMonth)}</div>
+      <div class="hero-num">${fmt(r.gross)}</div>
+      ${goalHtml}
+      ${r.gross ? `<div class="hero-figs">
+        <div><span>יצא</span><b>${fmt(r.out)}</b></div>
+        <div><span>${unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "יצא יותר ממה שנכנס"}</span><b>${fmt(r.left)}</b></div>
+      </div>` : ""}
+      ${unexplained ? `<p class="hero-note">כדי לדעת לאן הלך כל השאר, צריך את דף העו"ש של החודש.</p>` : partial && r.gross ? `<p class="hero-note">החודש עוד לא נגמר: חלק מההכנסות עוד לא נכנסו, וחלק מההוצאות כבר ירדו.</p>` : ""}`;
     if (!r.gross) {
-      $("#flowHeadline").innerHTML = r.cardTotal
-        ? `ב${monthName(currentMonth)} יצאו בכרטיס האשראי<span class="left-big">${fmt(r.cardTotal)}</span><small>אין דיווח הכנסות לחודש הזה, ולכן אי אפשר לחשב כמה נשאר.</small>`
-        : `עוד אין הכנסות ב${monthName(currentMonth)}.<span class="left-big">מוסיפים הכנסה או מייבאים מהבנק</span>`;
       $("#flowBar").innerHTML = ""; $("#flowLegend").innerHTML = "";
-      $("#flowList").innerHTML = `<p class="empty">כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל.</p>`;
-      renderCommitments();
+      $("#flowList").innerHTML = `<p class="empty">${r.cardTotal ? `בחודש הזה יצאו ${fmt(r.cardTotal)} בכרטיסי האשראי, אבל אין דיווח הכנסות.` : "כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל."}</p>`;
       $("#flowInsightsWrap").style.display = "none";
       return;
     }
-    const unexplained = !r.hasAccount && r.left > 0;
-    $("#flowHeadline").innerHTML = unexplained
-      ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ומתוכם אנחנו יודעים לאן הלכו <b>${fmt(r.out)}</b>. על השאר עוד אין פירוט<span class="left-big">${fmt(r.left)}</span><small>כדי לדעת לאן הלך הסכום הזה, צריך את דף העו"ש של החודש.</small>`
-      : r.left >= 0
-      ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>. אחרי כל מה שיצא נשארו לך<span class="left-big">${fmt(r.left)}</span>`
-      : `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ויצא יותר ממה שנכנס<span class="left-big">${fmt(r.left)}</span>${currentMonth === monthOf(todayISO()) ? "<small>החודש עוד לא נגמר: ההכנסות של שאר החודש עוד לא נכנסו, וחלק מההוצאות כבר ירדו.</small>" : ""}`;
 
     const groups = {};
     r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
@@ -482,8 +489,6 @@
       ${r.steps.map((s) => lrow("", s.group, esc(s.label), -s.amount, s.estimate ? ' <span class="tag">הערכה</span>' : "")).join("")}
       ${lrow("end", null, unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "חסר", r.left)}
     </div>`;
-    renderCommitments();
-
     const notMine = (groups.vat || 0) + (groups.tax || 0);
     const bizTop = r.steps.filter((s) => s.group === "biz")[0];
     const tips = [];
@@ -495,9 +500,7 @@
     if (toPrivate) tips.push(`העברת לעצמך <b>${fmt(toPrivate)}</b>${pension ? `, ועוד <b>${fmt(pension)}</b> לפנסיה ולגמל` : ""}. זה הכסף שלך. הסכום משתנה מחודש לחודש, ולכן קשה להרגיש אותו. משכורת קבועה באותו יום בכל חודש תעשה סדר.`);
     else if (groups.private) tips.push(`הוצאות אישיות: <b>${fmt(groups.private)}</b>.`);
     if (smalls) tips.push(`קפה, אוכל וקניות קטנות בכרטיס העסקי: <b>${fmt(smalls)}</b>. כרטיס פרטי נפרד ישאיר את העסק נקי.`);
-    if (state.balance && state.balance.amount < 0) tips.push(`החשבון העסקי היה במינוס כמעט כל התקופה, עד <b>${fmt(state.balance.low)}</b>. ב-15.11 היתרה הייתה <b>${fmt(state.balance.amount)}</b>, ועל המינוס משלמים ריבית.`);
-    const cm = commitments(); const nextM = Object.keys(cm.byMonth).sort()[0];
-    if (cm.total) tips.push(`ב${monthName(nextM)} ייצאו <b>${fmt(cm.byMonth[nextM])}</b> על תשלומים ישנים, עוד לפני שנכנס שקל אחד. כדאי לא לפתוח עסקאות חדשות בתשלומים עד שהרשימה תתקצר.`);
+    if (g && g.goal && c.gross >= g.goal) tips.push(`היעד של ${fmt(g.goal)} הושג.`);
     if (r.unknownCount) tips.push(`<b>${r.unknownCount}</b> תנועות עוד לא מסווגות. מסווגים אותן במסך הייבוא.`);
     if (r.skipped && !r.cardTotal) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
     if (r.hasDemo) tips.push(`<span class="tag demo">דמו</span> חלק מההוצאות בחודש הזה הן נתוני דמה, עד שיגיעו הנתונים האמיתיים.`);
@@ -600,6 +603,8 @@
       </svg>
       <p class="note">היום (${fmtDay(f.start)}): ${fmt(f.bal0)}. בסוף ${monthName(f.months[f.months.length - 1])}: <b>${fmt(f.end)}</b>.</p>`;
 
+    renderCommitments();
+
     // 3b. 13-week table (Sunday to Saturday), as in the advisor's 90-day plan
     const weekStart = (iso) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() - d.getDay()); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
     const weeks = []; let wb = f.bal0;
@@ -661,26 +666,9 @@
 
   function renderDashboard() {
     const c = calc(currentMonth);
-    const g = state.goals[currentMonth];
-    if (g && g.goal) {
-      const ratio = c.gross / g.goal, gap = Math.max(0, g.goal - c.gross);
-      const daily = g.remaining > 0 ? gap / g.remaining : null;
-      $("#goalCard").innerHTML = `
-        <h2>היעד של ${monthName(currentMonth)}</h2>
-        <div class="goal-figures"><span class="big">${fmt(c.gross)}</span><span class="of">מתוך ${fmt(g.goal)} · ${pct(ratio)}</span></div>
-        <div class="progress" role="progressbar" aria-valuenow="${Math.round(ratio * 100)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${Math.min(100, ratio * 100)}%"></div></div>
-        <div class="goal-row">
-          <div>חסר ליעד<b>${fmt(gap)}</b></div>
-          <div>ימי עבודה שנותרו<b>${g.remaining ?? "—"}</b></div>
-          <div>צריך ביום<b>${daily != null ? fmt(daily) : "—"}</b></div>
-        </div>`;
-    } else {
-      $("#goalCard").innerHTML = `<h2>היעד של ${monthName(currentMonth)}</h2><p class="empty">עוד לא נקבע יעד לחודש הזה. קובעים אותו בהגדרות.</p>`;
-    }
-
     $("#kpis").innerHTML = [
-      stat("מחזור", fmt(c.gross), state.settings.licensed ? `${fmt(c.netIncome)} בלי מע"מ` : "&nbsp;"),
-      stat("הוצאות העסק", fmt(c.expenses), `קבועות ${fmt(c.fixedNet)}`),
+      stat("הכנסה בלי מע\"מ", fmt(c.netIncome), state.settings.licensed ? `מתוך ${fmt(c.gross)} כולל מע"מ` : "&nbsp;"),
+      stat("הוצאות העסק", fmt(c.expenses), c.fixedNet ? `קבועות ${fmt(c.fixedNet)}` : "בלי מע\"מ, מסים ומשיכות"),
       stat("רווח לפני מס", `<span class="${c.profit >= 0 ? "pos" : "neg"}">${fmt(c.profit)}</span>`, moneyFlow(currentMonth).hasAccount ? `רווחיות ${pct(c.margin)}` : "לפי הכרטיס בלבד, בלי שכירות ועו\"ש"),
       stat("נקודת איזון", c.fixedNet ? fmt(c.breakEvenGross) : "—", c.fixedNet ? "מחזור שמכסה את הקבועות" : "עוד לא הוגדרו הוצאות קבועות"),
     ].join("");

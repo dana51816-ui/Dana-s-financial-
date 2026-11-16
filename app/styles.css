@@ -423,3 +423,24 @@ dialog[open] { animation: sheet .4s var(--ease); }
 .r-salary { color: var(--mauve-ink); font-weight: 600; }
 .rnum { width: auto; min-width: 34px; padding: 0 6px; border-radius: 99px; font-size: 13.5px; }
 .rday { grid-template-columns: 58px 1fr; }
+
+/* ---------- the month: hero ---------- */
+.hero-k { font-size: 15px; color: rgba(255, 255, 255, .88); }
+.hero-num { font-family: var(--num); font-weight: 200; font-size: 58px; line-height: 1.08; letter-spacing: -.01em; margin: 2px 0 14px; }
+@media (min-width: 900px) { .hero-num { font-size: 84px; } }
+.hero-goal { margin-bottom: 18px; }
+.hbar { height: 4px; border-radius: 99px; background: rgba(255, 255, 255, .25); overflow: hidden; }
+.hbar i { display: block; height: 100%; border-radius: 99px; background: #fff; transition: width .8s var(--ease); }
+.hero-goal-t { font-size: 14px; color: rgba(255, 255, 255, .9); margin-top: 8px; }
+.hero-figs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 0 18px; border-top: 1px solid rgba(255, 255, 255, .22); }
+.hero-figs span { display: block; font-size: 13px; color: rgba(255, 255, 255, .82); }
+.hero-figs b { font-family: var(--num); font-weight: 300; font-size: 26px; }
+.hero-note { font-size: 13.5px; color: rgba(255, 255, 255, .82); margin: -6px 0 14px; }
+details.pl-wrap summary { list-style: none; display: flex; align-items: center; justify-content: space-between; color: var(--ink); padding: 0; }
+details.pl-wrap summary::-webkit-details-marker { display: none; }
+details.pl-wrap summary h2 { margin: 0; }
+details.pl-wrap summary::after { content: "הצגה"; font-size: 14px; color: var(--mauve-deep); font-weight: 500; }
+details.pl-wrap[open] summary::after { content: "הסתרה"; }
+details.pl-wrap[open] summary { margin-bottom: 14px; }
+.side-col { display: flex; flex-direction: column; gap: 14px; }
+.side-col .section { margin: 0; }
