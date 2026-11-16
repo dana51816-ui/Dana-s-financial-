@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ניהול פיננסי · דנה דרעי</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark">DD</span>
+      <div>
+        <div class="brand-name">Dana Deri Beauty Studio</div>
+        <div class="brand-sub">ניהול פיננסי · גרסת דמו</div>
+      </div>
+    </div>
+    <div class="top-controls">
+      <select id="monthSelect" aria-label="חודש"></select>
+      <select id="roleSelect" aria-label="תצוגה">
+        <option value="advisor">תצוגת יועצת</option>
+        <option value="client">תצוגת דנה דרעי</option>
+      </select>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="dashboard">דשבורד</button>
+    <button class="tab" data-tab="income">הכנסות</button>
+    <button class="tab" data-tab="expenses">הוצאות</button>
+    <button class="tab" data-tab="settings" data-role="advisor">הגדרות ויעדים</button>
+  </nav>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="panel active">
+      <div class="kpis" id="kpis"></div>
+      <div class="card" id="goalCard"></div>
+      <div class="grid2">
+        <div class="card">
+          <h3>הכנסות, הוצאות ורווח לפי חודש</h3>
+          <div id="trendChart"></div>
+        </div>
+        <div class="card">
+          <h3>פילוח הוצאות החודש</h3>
+          <div id="expenseBreakdown"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>דוח רווח והפסד – <span id="plMonth"></span></h3>
+        <table class="pl" id="plTable"></table>
+        <p class="note" id="plNote"></p>
+      </div>
+    </section>
+
+    <!-- INCOME -->
+    <section id="tab-income" class="panel">
+      <div class="card">
+        <h3>הזנת הכנסה</h3>
+        <form id="incomeForm" class="form">
+          <label>תאריך<input type="date" name="date" required></label>
+          <label>סוג
+            <select name="kind">
+              <option value="day">יום עבודה</option>
+              <option value="month">סיכום חודשי (ללא פירוט יומי)</option>
+            </select>
+          </label>
+          <label>עיר
+            <select name="city">
+              <option value="">לא צוין</option>
+              <option>ראשון לציון</option>
+              <option>מודיעין</option>
+            </select>
+          </label>
+          <label>סכום (₪, כולל מע"מ)<input type="number" name="amount" min="0" step="1" required inputmode="numeric"></label>
+          <label class="wide">הערה<input type="text" name="note" placeholder="למשל: 11 גבות ושפם, 5 עיצובי גבות"></label>
+          <button class="btn primary" type="submit">הוספה</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>הכנסות – <span class="monthLabel"></span></h3>
+        <div id="incomeList"></div>
+      </div>
+    </section>
+
+    <!-- EXPENSES -->
+    <section id="tab-expenses" class="panel">
+      <div class="card">
+        <h3>הוספת הוצאה</h3>
+        <form id="expenseForm" class="form">
+          <label>סוג
+            <select name="type">
+              <option value="variable">משתנה / חד-פעמית</option>
+              <option value="fixed">קבועה (חוזרת כל חודש)</option>
+            </select>
+          </label>
+          <label>תיאור<input type="text" name="name" required placeholder="למשל: הזמנת חומרים"></label>
+          <label>קטגוריה<select name="category" id="categorySelect"></select></label>
+          <label>סכום (₪)<input type="number" name="amount" min="0" step="1" required inputmode="numeric"></label>
+          <label class="date-field">תאריך<input type="date" name="date"></label>
+          <label class="check"><input type="checkbox" name="vat" checked> כולל מע"מ מוכר</label>
+          <button class="btn primary" type="submit">הוספה</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>הוצאות קבועות (חודשיות)</h3>
+        <div id="fixedList"></div>
+      </div>
+      <div class="card">
+        <h3>הוצאות משתנות – <span class="monthLabel"></span></h3>
+        <div id="variableList"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="panel">
+      <div class="card">
+        <h3>יעדי מחזור חודשיים</h3>
+        <form id="goalForm" class="form">
+          <label>חודש<input type="month" name="month" required></label>
+          <label>יעד (₪)<input type="number" name="goal" min="0" step="100" required></label>
+          <label>ימי עבודה מתוכננים בחודש<input type="number" name="workdays" min="0" max="31"></label>
+          <button class="btn primary" type="submit">שמירה</button>
+        </form>
+        <div id="goalList"></div>
+      </div>
+      <div class="card">
+        <h3>מע"מ</h3>
+        <form id="vatForm" class="form">
+          <label class="check"><input type="checkbox" name="licensed"> עוסקת מורשה (המחירים כוללים מע"מ)</label>
+          <label>שיעור מע"מ (%)<input type="number" name="rate" min="0" max="30" step="0.5"></label>
+          <button class="btn" type="submit">שמירה</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3>גיבוי ונתונים</h3>
+        <p class="note">בדמו הנתונים נשמרים בדפדפן בלבד. כדי להעביר נתונים בין המכשירים שלכן, מייצאים קובץ ושולחים אותו.</p>
+        <div class="row">
+          <button class="btn" id="exportBtn">ייצוא קובץ</button>
+          <label class="btn">ייבוא קובץ<input type="file" id="importInput" accept="application/json" hidden></label>
+          <button class="btn danger" id="resetBtn">איפוס לנתוני הדמו</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">גרסת דמו 0.1 · הוצאות הדוגמה הן נתוני דמה ומסומנות ב־<span class="tag demo">דמו</span></footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
