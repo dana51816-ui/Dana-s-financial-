@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "dana-deri-finance-v3";
+  const STORAGE_KEY = "dana-deri-finance-v4";
 
   // Category -> group. Groups drive the "where did the money go" view.
   const CATS = {
@@ -12,7 +12,8 @@
     "הלוואות": "loan",
     "תשלום מע\"מ": "vat", "מקדמות מס וביטוח לאומי": "tax",
     "ציוד": "biz",
-    "משיכה פרטית": "private", "קניות אישיות": "private", "ביטוח אישי": "private",
+    "משיכה פרטית": "private", "קניות אישיות": "private", "ביטוח אישי": "private", "פנסיה וגמל": "private",
+    "כרטיס אשראי בלי פירוט": "unknown",
     "חיוב כרטיס אשראי": "skip",
     "לא מסווג": "unknown",
   };
@@ -27,6 +28,8 @@
     ["כספומט", "משיכה פרטית"], ["משיכת מזומן", "משיכה פרטית"],
     ["ישראכרט", "חיוב כרטיס אשראי"], ["כאל", "חיוב כרטיס אשראי"], ["מקס איט", "חיוב כרטיס אשראי"],
     ["max it", "חיוב כרטיס אשראי"], ["לאומי קארד", "חיוב כרטיס אשראי"], ["אמריקן אקספרס", "חיוב כרטיס אשראי"], ["דיינרס", "חיוב כרטיס אשראי"],
+    ["העברה-נייד", "משיכה פרטית"], ["הראל פנסיה", "פנסיה וגמל"], ["מסטרקרד", "כרטיס אשראי בלי פירוט"],
+    ["הלוא", "הלוואות"], ["הלו'", "הלוואות"], ["רבית", "עמלות בנק ואשראי"], ["מסלול", "עמלות בנק ואשראי"], ["ontime", "עמלות בנק ואשראי"],
     ["רואה חשבון", "הנהלת חשבונות"], ["קוסמטיק", "חומרים לטיפולים"], ["זינגבוים", "חומרים לטיפולים"],
     ["אלקטרו", "ציוד"], ["פנגו", "נסיעות ורכב"], ["ביטוח חיים", "ביטוח אישי"],
     ["הלוואה", "הלוואות"], ["עמלה", "עמלות בנק ואשראי"], ["עמלת", "עמלות בנק ואשראי"],
@@ -86,13 +89,21 @@
       },
       income: [
         { id: uid(), date: "2026-08-31", kind: "month", city: "", amount: 21330, note: "סיכום חודשי שדנה דרעי דיווחה בוואטסאפ ב-13.10" },
+        { id: uid(), date: "2026-09-30", kind: "month", city: "", amount: 21583, note: "לפי הזיכויים בעו\"ש (לא היה דיווח לספטמבר)" },
         { id: uid(), date: "2026-10-31", kind: "month", city: "", amount: 24080, note: "סיכום אוקטובר שדנה דרעי דיווחה ב-29–30.10" },
         { id: uid(), date: "2026-11-14", kind: "month", city: "", amount: 10800, note: "סך הכל עד 14.11 (כולל 1,400 ₪ ב-10.11)" },
         { id: uid(), date: "2026-11-15", kind: "day", city: "", amount: 2040, note: "11 גבות ושפם, 5 עיצובי גבות (דווח 16.11)" },
       ],
       fixed: [],
-      variable: (window.SEED_CARD || []).map((r) => cardItem(DEFAULT_RULES, r)),
-      bankCredits: [],
+      variable: [
+        ...(window.SEED_CARD || []).map((r) => cardItem(DEFAULT_RULES, r)),
+        ...(window.SEED_BANK || []).filter((r) => r.debit > 0).map((r) => {
+          const category = categorizeWith(DEFAULT_RULES, r.desc, "");
+          return { id: uid(), date: r.date, name: r.desc, note: "", category, amount: r.debit, vat: CATS[category] === "biz", source: "bank" };
+        }),
+      ],
+      bankCredits: (window.SEED_BANK || []).filter((r) => r.credit > 0).map((r) => ({ id: uid(), date: r.date, desc: r.desc, amount: r.credit })),
+      balance: window.SEED_BALANCE || null,
       rules: DEFAULT_RULES.slice(),
     };
   }
@@ -193,7 +204,13 @@
 
     const loans = sumGroup("loan"); if (loans) steps.push({ label: "החזרי הלוואות", amount: loans, group: "loan" });
     const priv = sumGroup("private"); if (priv) steps.push({ label: "אישי ומשיכות", amount: priv, group: "private" });
-    const unk = sumGroup("unknown"); if (unk) steps.push({ label: "לא מסווג – צריך לברר", amount: unk, group: "unknown" });
+    // Unknown money is listed item by item, so it is clear what to ask about.
+    const unkMap = {};
+    all.filter((e) => groupOf(e.category) === "unknown").forEach((e) => {
+      const label = e.category === "לא מסווג" ? `${e.name} – צריך לברר` : e.category;
+      unkMap[label] = (unkMap[label] || 0) + e.amount;
+    });
+    Object.entries(unkMap).sort((a, b) => b[1] - a[1]).forEach(([label, amt]) => steps.push({ label, amount: amt, group: "unknown" }));
 
     const skipped = sumGroup("skip");
     const out = steps.reduce((s, x) => s + x.amount, 0);
@@ -267,7 +284,7 @@
       ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ומתוכם אנחנו יודעים לאן הלכו <b>${fmt(r.out)}</b>. על השאר עוד אין פירוט<span class="left-big">${fmt(r.left)}</span><small>כדי לדעת לאן הלך הסכום הזה, צריך את דף העו"ש של החודש.</small>`
       : r.left >= 0
       ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>. אחרי כל מה שיצא נשארו לך<span class="left-big">${fmt(r.left)}</span>`
-      : `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ויצא יותר ממה שנכנס<span class="left-big">${fmt(r.left)}</span>`;
+      : `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ויצא יותר ממה שנכנס<span class="left-big">${fmt(r.left)}</span>${currentMonth === monthOf(todayISO()) ? "<small>החודש עוד לא נגמר: ההכנסות של שאר החודש עוד לא נכנסו, וחלק מההוצאות כבר ירדו.</small>" : ""}`;
 
     const groups = {};
     r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
@@ -297,11 +314,17 @@
     const tips = [];
     if (notMine) tips.push(`<b>${fmt(notMine)}</b> (${per100(notMine)} ₪ מכל 100 ₪) הם מע"מ ומסים. הכסף הזה נכנס לחשבון אבל הוא לא שלך. מעבירים אותו לחשבון נפרד ביום שהוא נכנס, וכך מה שנשאר בעו"ש הוא באמת שלך.`);
     if (bizTop) tips.push(`ההוצאה העסקית הגדולה ביותר היא <b>${esc(bizTop.label)}</b>: ${fmt(bizTop.amount)}, כלומר ${per100(bizTop.amount)} ₪ מכל 100 ₪.`);
-    if (groups.private) tips.push(`הוצאות אישיות ומשיכות: <b>${fmt(groups.private)}</b>. קפה, אוכל וקניות קטנות בכרטיס העסקי מתערבבים עם העסק. משכורת קבועה לעצמך וכרטיס פרטי נפרד עושים סדר.`);
+    const { all: monthAll } = monthExpenses(currentMonth);
+    const sumCat = (c) => monthAll.filter((e) => e.category === c).reduce((a, e) => a + e.amount, 0);
+    const toPrivate = sumCat("משיכה פרטית"), pension = sumCat("פנסיה וגמל"), smalls = sumCat("קניות אישיות");
+    if (toPrivate) tips.push(`העברת לעצמך <b>${fmt(toPrivate)}</b>${pension ? `, ועוד <b>${fmt(pension)}</b> לפנסיה ולגמל` : ""}. זה הכסף שלך. הסכום משתנה מחודש לחודש, ולכן קשה להרגיש אותו. משכורת קבועה באותו יום בכל חודש תעשה סדר.`);
+    else if (groups.private) tips.push(`הוצאות אישיות: <b>${fmt(groups.private)}</b>.`);
+    if (smalls) tips.push(`קפה, אוכל וקניות קטנות בכרטיס העסקי: <b>${fmt(smalls)}</b>. כרטיס פרטי נפרד ישאיר את העסק נקי.`);
+    if (state.balance && state.balance.amount < 0) tips.push(`החשבון העסקי היה במינוס כמעט כל התקופה, עד <b>${fmt(state.balance.low)}</b>. ב-15.11 היתרה הייתה <b>${fmt(state.balance.amount)}</b>, ועל המינוס משלמים ריבית.`);
     const cm = commitments(); const nextM = Object.keys(cm.byMonth).sort()[0];
     if (cm.total) tips.push(`ב${monthName(nextM)} ייצאו <b>${fmt(cm.byMonth[nextM])}</b> על תשלומים ישנים, עוד לפני שנכנס שקל אחד. כדאי לא לפתוח עסקאות חדשות בתשלומים עד שהרשימה תתקצר.`);
     if (r.unknownCount) tips.push(`<b>${r.unknownCount}</b> תנועות עוד לא מסווגות. מסווגים אותן במסך הייבוא.`);
-    if (r.skipped) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
+    if (r.skipped && !r.cardTotal) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
     if (r.hasDemo) tips.push(`<span class="tag demo">דמו</span> חלק מההוצאות בחודש הזה הן נתוני דמה, עד שיגיעו הנתונים האמיתיים.`);
     $("#flowInsightsWrap").style.display = tips.length ? "" : "none";
     $("#flowInsights").innerHTML = `<ul class="tips">${tips.map((t) => `<li>${t}</li>`).join("")}</ul>`;
