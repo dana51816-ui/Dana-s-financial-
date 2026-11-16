@@ -243,6 +243,121 @@
     return { items, byMonth, total };
   }
 
+  // ---------- cash-flow forecast ----------
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const addMonths = (m, k) => { const [y, mo] = m.split("-").map(Number); const d = new Date(y, mo - 1 + k, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
+  const daysIn = (m) => { const [y, mo] = m.split("-").map(Number); return new Date(y, mo, 0).getDate(); };
+  const dayOf = (iso) => +iso.slice(8, 10);
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor((s.length - 1) / 2)] : 0; };
+  const atDay = (m, d) => `${m}-${pad2(Math.min(d, daysIn(m)))}`;
+  const isTransferIn = (desc) => /העברה/.test(desc) && !/bit/i.test(desc);
+
+  // Months fully covered by the checking-account data (used as the history window).
+  function bankMonths() {
+    const ms = new Set([...state.bankCredits.map((c) => monthOf(c.date)),
+      ...state.variable.filter((e) => e.source === "bank" && !e.card).map((e) => monthOf(e.date))]);
+    return [...ms].sort();
+  }
+  const lastBankDate = () => [...state.bankCredits.map((c) => c.date), ...state.variable.filter((e) => e.source === "bank" && !e.card).map((e) => e.date)].sort().pop();
+
+  // Recurring checking-account debits (rent cheque, loan, pension, other card companies...).
+  function recurringBank() {
+    const months = bankMonths(); const full = months.filter((m) => m < monthOf(lastBankDate() || todayISO()));
+    const by = {};
+    state.variable.filter((e) => e.source === "bank" && !e.card && !["חיוב כרטיס אשראי", "משיכה פרטית"].includes(e.category) && groupOf(e.category) !== "vat")
+      .forEach((e) => { const k = e.name + "|" + (dayOf(e.date) <= 12 ? "a" : "b"); (by[k] = by[k] || []).push(e); });
+    return Object.entries(by).map(([key, list]) => {
+      const name = key.split("|")[0];
+      const ms = new Set(list.map((e) => monthOf(e.date)));
+      if (ms.size < 2) return null;
+      const perMonth = full.map((m) => list.filter((e) => monthOf(e.date) === m).reduce((s, e) => s + e.amount, 0));
+      return { name, category: list[0].category, day: median(list.map((e) => dayOf(e.date))), amount: perMonth.reduce((a, b) => a + b, 0) / Math.max(1, full.length) };
+    }).filter(Boolean).filter((r) => r.amount > 0);
+  }
+
+  // Credit-card bill model: bill day + recurring merchants (installments and VAT are modelled separately).
+  function cardModel() {
+    const cards = state.variable.filter((e) => e.card);
+    const stmts = [...new Set(cards.map((e) => monthOf(e.date)))].sort();
+    const billDay = median(cards.map((e) => dayOf(e.date))) || 10;
+    const by = {};
+    cards.filter((e) => !e.inst && groupOf(e.category) !== "vat").forEach((e) => { (by[e.name] = by[e.name] || []).push(e); });
+    const items = Object.entries(by).filter(([, l]) => new Set(l.map((e) => monthOf(e.date))).size >= 2)
+      .map(([name, l]) => ({ name, category: l[0].category, amount: l.reduce((s, e) => s + e.amount, 0) / Math.max(1, stmts.length) }));
+    const recNames = new Set(items.map((i) => i.name));
+    const variableAvg = cards.filter((e) => !e.inst && groupOf(e.category) !== "vat" && !recNames.has(e.name)).reduce((s, e) => s + e.amount, 0) / Math.max(1, stmts.length);
+    return { billDay, items, variableAvg, recurring: items.reduce((s, i) => s + i.amount, 0) + variableAvg, stmts };
+  }
+
+  // Income model from the checking account: monthly average and how it spreads over the month.
+  function incomeModel() {
+    const last = monthOf(lastBankDate() || todayISO());
+    const full = bankMonths().filter((m) => m < last);
+    const credits = state.bankCredits.filter((c) => full.includes(monthOf(c.date)) && !isTransferIn(c.desc));
+    const total = credits.reduce((s, c) => s + c.amount, 0);
+    const avg = full.length ? total / full.length : state.income.reduce((s, i) => s + i.amount, 0) / Math.max(1, new Set(state.income.map((i) => monthOf(i.date))).size);
+    const thirds = [0, 0, 0];
+    credits.forEach((c) => { thirds[dayOf(c.date) <= 10 ? 0 : dayOf(c.date) <= 20 ? 1 : 2] += c.amount; });
+    const frac = total ? thirds.map((t) => t / total) : [1 / 3, 1 / 3, 1 / 3];
+    const cardDays = [...new Set(state.bankCredits.filter((c) => /מקס|אמריקן|דיינרס|ישראכרט|כאל/.test(c.desc)).map((c) => dayOf(c.date)))];
+    return { avg, frac, full, cardDays: [...new Set(cardDays.map((d) => (d <= 4 ? 2 : d <= 10 ? 8 : d)))].sort((a, b) => a - b).slice(0, 3) };
+  }
+
+  // Bimonthly VAT estimate for the period ending in month `end` (paid on the 15th after, billed on the card the month after that).
+  function vatEstimate(end, incomeAvg) {
+    const r = state.settings.vatRate / 100; if (!state.settings.licensed) return 0;
+    const months = [addMonths(end, -1), end];
+    const out = months.reduce((s, m) => {
+      const g = state.income.filter((i) => monthOf(i.date) === m).reduce((a, i) => a + i.amount, 0);
+      return s + (g || incomeAvg) * r / (1 + r);
+    }, 0);
+    const inV = state.variable.filter((e) => months.includes(monthOf(e.date)) && e.vat && groupOf(e.category) === "biz").reduce((s, e) => s + e.amount * r / (1 + r), 0);
+    return Math.max(0, out - inV);
+  }
+
+  function forecast(salary, salaryDay, horizon = 3) {
+    const start = lastBankDate(); if (!start) return null;
+    const bal0 = state.balance ? state.balance.amount : 0;
+    const inc = incomeModel(), card = cardModel(), rec = recurringBank(), cm = commitments();
+    const startM = monthOf(start), endM = addMonths(startM, horizon);
+    const fullStart = addMonths(startM, 1);
+    const ev = [];
+    for (let m = startM; m <= endM; m = addMonths(m, 1)) {
+      [[1, 10, 0], [11, 20, 1], [21, daysIn(m), 2]].forEach(([a, b, i]) => {
+        let share = 1, d = Math.round((a + b) / 2);
+        if (m === startM) { const sd = dayOf(start); if (sd >= b) return; if (sd >= a) { share = (b - sd) / (b - a + 1); d = Math.max(d, sd + 1); } }
+        ev.push({ date: atDay(m, d), name: "הכנסות מטיפולים", amount: inc.avg * inc.frac[i] * share, kind: "in", est: true });
+      });
+      rec.forEach((r) => ev.push({ date: atDay(m, r.day), name: r.name, amount: -r.amount, kind: r.category === "פנסיה וגמל" ? "self" : "out", category: r.category }));
+      const [, mo] = m.split("-").map(Number);
+      const vat = mo % 2 === 0 ? vatEstimate(addMonths(m, -2), inc.avg) : 0; // even months: VAT for the period two months back
+      const inst = cm.byMonth[m] || 0;
+      ev.push({ date: atDay(m, card.billDay), name: "חיוב כרטיס מקס", amount: -(card.recurring + inst + vat), kind: "card", est: true,
+        parts: { recurring: card.recurring, inst, vat } });
+      if (salary > 0) ev.push({ date: atDay(m, salaryDay), name: "המשכורת שלך", amount: -salary, kind: "salary" });
+    }
+    const list = ev.filter((e) => e.date > start && e.date <= `${endM}-31`).sort((a, b) => a.date.localeCompare(b.date) || (a.kind === "in" ? -1 : 1));
+    let bal = bal0, min = { bal: bal0, date: start };
+    list.forEach((e) => { bal += e.amount; e.balance = bal; if (bal < min.bal) min = { bal, date: e.date }; });
+    const months = []; for (let m = addMonths(startM, 1); m <= endM; m = addMonths(m, 1)) months.push(m);
+    return { start, bal0, list, min, end: bal, inc, card, rec, months };
+  }
+
+  // Highest round salary that still pays the overdraft down by `paydown` per month over the horizon.
+  function recommendSalary(day, paydown = 1000) {
+    const base = forecast(0, day); if (!base) return 0;
+    const n = base.months.length;
+    for (let s = 12000; s >= 0; s -= 250) {
+      const f = forecast(s, day);
+      // measure full months only: from the end of the current (partial) month to the end of the horizon
+      const startM = monthOf(f.start);
+      const before = f.list.filter((e) => monthOf(e.date) === startM);
+      const from = before.length ? before[before.length - 1].balance : f.bal0;
+      if (f.end >= from + paydown * n) return s;
+    }
+    return 0;
+  }
+
   // ---------- render ----------
   const icon = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
   const delBtn = (kind, id) => `<button class="del" data-del="${kind}" data-id="${id}" aria-label="מחיקה">${icon("trash")}</button>`;
@@ -251,6 +366,7 @@
   function render() {
     renderMonthNav();
     renderFlow();
+    renderCash();
     renderDashboard();
     renderIncome();
     renderExpenses();
@@ -344,6 +460,98 @@
       <div class="clist">${cm.items.sort((a, b) => b.amount * (b.inst.t - b.inst.n) - a.amount * (a.inst.t - a.inst.n)).map((e) => `
         <div class="citem"><span><b>${esc(e.name)}</b><small>${fmt(e.amount)} לחודש · נשארו ${e.inst.t - e.inst.n} מתוך ${e.inst.t}</small></span>
         <span class="lamt">${fmt(e.amount * (e.inst.t - e.inst.n))}</span></div>`).join("")}</div>`;
+  }
+
+  const salarySettings = () => ({ day: 11, amount: null, paydown: 1000, ...(state.settings.salary || {}) });
+  const fmtDay = (iso) => `${dayOf(iso)}.${+iso.slice(5, 7)}`;
+
+  function renderCash() {
+    const ss = salarySettings();
+    const rec = recommendSalary(ss.day, ss.paydown);
+    const salary = ss.amount != null ? ss.amount : rec;
+    const f = forecast(salary, ss.day);
+    if (!f) { $("#salaryCard").innerHTML = `<p class="empty">כדי לבנות תזרים צריך לייבא דף עו"ש מהבנק.</p>`; ["#cashWarn", "#cashChart", "#cashRoutine", "#cashList"].forEach((x) => ($(x).innerHTML = "")); $("#cashWarn").style.display = "none"; return; }
+
+    // 1. salary
+    $("#salaryCard").innerHTML = `
+      <h2>המשכורת שלך</h2>
+      <div class="salary-amt">${fmt(salary)}</div>
+      <p class="salary-when">בכל <b>${ss.day} לחודש</b>, אחרי שחיוב האשראי יורד</p>
+      <p class="note">מעבירים את הסכום לחשבון הפרטי, ומשם הוא שלך. בחשבון העסקי לא נוגעים עד ה-${ss.day} הבא.
+      ${ss.amount != null && ss.amount !== rec ? `<br>נקבע ידנית. ההמלצה לפי הנתונים: ${fmt(rec)}.` : `<br>ככה החשבון העסקי מחזיר כ-${fmt(ss.paydown)} מהמינוס בכל חודש.`}</p>`;
+
+    // 2. warning about the tightest point
+    const low = state.balance ? state.balance.low : 0;
+    const bill = f.list.filter((e) => e.kind === "card").sort((a, b) => a.amount - b.amount)[0];
+    const warn = f.min.bal < low;
+    $("#cashWarn").style.display = warn ? "" : "none";
+    if (warn) $("#cashWarn").innerHTML = `<h2>נקודה לחוצה ב-${fmtDay(f.min.date)}</h2>
+      <p>החשבון צפוי לרדת ל-<b>${fmt(f.min.bal)}</b>, נמוך יותר מכל מה שהיה עד היום (${fmt(low)}).
+      ${bill ? `הסיבה: בחיוב האשראי של ${fmtDay(bill.date)} יורדים יחד ${bill.parts.vat ? `מע"מ של חודשיים (כ-${fmt(bill.parts.vat)}), ` : ""}${bill.parts.inst ? `תשלומים לספקים (${fmt(bill.parts.inst)}) ` : ""}וההוצאות הקבועות בכרטיס.` : ""}</p>
+      <p class="note">מה אפשר לעשות: לא לפתוח עסקאות חדשות בתשלומים, ולשים בצד בכל שבוע חלק מההכנסות בשביל המע"מ.</p>`;
+
+    // 3. balance chart (step line)
+    const pts = [{ date: f.start, bal: f.bal0 }, ...f.list.map((e) => ({ date: e.date, bal: e.balance }))];
+    const t0 = new Date(f.start).getTime(), t1 = new Date(pts[pts.length - 1].date).getTime();
+    const W = 640, H = 220, L = 8, R = 8, T = 16, B = 26;
+    const vals = pts.map((p) => p.bal); const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+    const x = (d) => W - R - ((new Date(d).getTime() - t0) / Math.max(1, t1 - t0)) * (W - L - R);
+    const y = (v) => T + ((hi - v) / Math.max(1, hi - lo)) * (H - T - B);
+    let dPath = `M ${x(pts[0].date)} ${y(pts[0].bal)}`;
+    for (let i = 1; i < pts.length; i++) dPath += ` H ${x(pts[i].date)} V ${y(pts[i].bal)}`;
+    const area = `${dPath} V ${y(0)} H ${x(pts[0].date)} Z`;
+    const ticks = f.months.map((m) => `<line x1="${x(m + "-01")}" x2="${x(m + "-01")}" y1="${T}" y2="${H - B}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${x(m + "-01")}" y="${H - 8}" text-anchor="middle">${shortMonth(m)}</text>`).join("");
+    const sal = f.list.filter((e) => e.kind === "salary").map((e) => `<circle cx="${x(e.date)}" cy="${y(e.balance)}" r="3.5" fill="var(--mauve-deep)"><title>משכורת ${fmtDay(e.date)}</title></circle>`).join("");
+    $("#cashChart").innerHTML = `
+      <div class="legend"><span><i class="dot" style="background:var(--mauve)"></i>יתרה צפויה</span><span><i class="dot" style="background:var(--mauve-deep)"></i>יום משכורת</span><span><i class="dot" style="background:var(--bad)"></i>הנקודה הנמוכה</span></div>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="יתרה צפויה">
+        <defs><linearGradient id="gBal" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#B28C7F" stop-opacity=".05"/><stop offset="1" stop-color="#B28C7F" stop-opacity=".28"/></linearGradient></defs>
+        ${ticks}
+        <line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--ink)" stroke-width=".8"/>
+        <text x="${L}" y="${y(0) - 6}" text-anchor="start" style="fill:var(--ink)">0</text>
+        <path d="${area}" fill="url(#gBal)"/>
+        <path d="${dPath}" fill="none" stroke="var(--mauve)" stroke-width="1.8" stroke-linejoin="round"/>
+        ${sal}
+        <circle cx="${x(f.min.date)}" cy="${y(f.min.bal)}" r="4.5" fill="var(--bad)"/>
+        <text x="${x(f.min.date)}" y="${Math.min(H - B - 4, y(f.min.bal) + 18)}" text-anchor="middle" style="fill:var(--bad)">${Math.round(f.min.bal).toLocaleString("he-IL")}</text>
+        <circle cx="${x(f.start)}" cy="${y(f.bal0)}" r="3.5" fill="var(--ink)"/>
+      </svg>
+      <p class="note">היום (${fmtDay(f.start)}): ${fmt(f.bal0)}. בסוף ${monthName(f.months[f.months.length - 1])}: <b>${fmt(f.end)}</b>.</p>`;
+
+    // 4. monthly routine by day of month
+    const days = {};
+    const add = (d, text, kind) => { (days[d] = days[d] || []).push({ text, kind }); };
+    f.inc.cardDays.forEach((d) => add(d, "נכנס כסף מתשלומים באשראי", "in"));
+    const fees = f.rec.filter((r) => r.category === "עמלות בנק ואשראי").reduce((a, r) => a + r.amount, 0);
+    f.rec.filter((r) => r.category !== "עמלות בנק ואשראי").forEach((r) => add(r.day, `${r.category === "לא מסווג" ? r.name : r.category === "הלוואות" ? "הלוואה" : r.category === "פנסיה וגמל" ? "פנסיה וגמל" : r.name}: ${fmt(r.amount)}`, "out"));
+    add(f.card.billDay, `חיוב כרטיס מקס: בערך ${fmt(f.card.recurring)}, ועוד תשלומים ומע"מ בחודשים מסוימים`, "out");
+    add(ss.day, `<b>מעבירים משכורת ${fmt(salary)}</b>`, "salary");
+    if (fees) add(1, `עמלות בנק: כ-${fmt(fees)} בחודש`, "note");
+    add(15, `כל חודשיים: תשלום מע"מ (יורד בחיוב האשראי של החודש שאחריו)`, "note");
+    // merge loan interest + principal into one line
+    Object.keys(days).forEach((d) => {
+      const loans = days[d].filter((x) => x.text.startsWith("הלוואה:"));
+      if (loans.length > 1) { const sum = f.rec.filter((r) => r.category === "הלוואות" && r.day === +d).reduce((a, r) => a + r.amount, 0); days[d] = days[d].filter((x) => !x.text.startsWith("הלוואה:")); days[d].push({ text: `הלוואה: ${fmt(sum)}`, kind: "out" }); }
+    });
+    $("#cashRoutine").innerHTML = `<div class="routine">${Object.keys(days).map(Number).sort((a, b) => a - b).map((d) => `
+      <div class="rday"><span class="rnum ${days[d].some((x) => x.kind === "salary") ? "sal" : ""}">${d}</span>
+      <div class="rtext">${days[d].map((x) => `<div class="r-${x.kind}">${x.text}</div>`).join("")}</div></div>`).join("")}</div>
+      <p class="note">ההכנסות מטיפולים (ביט, מזומן ואשראי) נכנסות לאורך כל החודש. ${Math.round(f.inc.frac[0] * 100)}% מהן נכנסות בעשרת הימים הראשונים.</p>`;
+
+    // 5. upcoming events, next ~45 days
+    const until = new Date(new Date(f.start).getTime() + 46 * 864e5).toISOString().slice(0, 10);
+    const up = f.list.filter((e) => e.date <= until);
+    let lastM = "";
+    $("#cashList").innerHTML = `<div class="list">${up.map((e) => {
+      const head = monthOf(e.date) !== lastM ? `<div class="list-month">${monthName(lastM = monthOf(e.date))}</div>` : "";
+      const meta = e.parts ? `קבועות ${fmt(e.parts.recurring)}${e.parts.inst ? ` · תשלומים ${fmt(e.parts.inst)}` : ""}${e.parts.vat ? ` · מע"מ ${fmt(e.parts.vat)}` : ""}` : e.kind === "in" ? "ממוצע לפי החודשים הקודמים" : "";
+      return `${head}<div class="item ev-${e.kind}"><span class="t"><span class="dchip">${fmtDay(e.date)}</span>${esc(e.name)}${e.est ? ' <span class="tag">צפי</span>' : ""}</span>
+        <span class="meta">${meta}${meta ? " · " : ""}יתרה אחרי: ${fmt(e.balance)}</span><span class="amt ${e.amount > 0 ? "pos" : ""}">${fmt(e.amount)}</span><span></span></div>`;
+    }).join("")}</div>`;
+
+    const sf = $("#salaryForm");
+    sf.day.value = ss.day; sf.amount.value = ss.amount ?? ""; sf.paydown.value = ss.paydown;
+    $("#cashModelNote").innerHTML = `הצפי מחושב לפי: הכנסה ממוצעת של ${fmt(f.inc.avg)} בחודש (${f.inc.full.map(shortMonth).join(" ו")}, לפי הבנק, בלי העברות פנימיות), ${f.rec.length} חיובים קבועים מהעו"ש, חיובים קבועים וממוצעים בכרטיס מקס (${fmt(f.card.recurring)}), תשלומים שכבר נקבעו ומע"מ דו-חודשי משוער.`;
   }
 
   function stat(label, value, sub) {
@@ -666,6 +874,13 @@
       currentMonth = monthOf(date);
       $("#quick").close();
       commit();
+    });
+
+    $("#salaryForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const sf = e.target;
+      state.settings.salary = { day: Math.min(28, Math.max(1, +sf.day.value || 11)), amount: sf.amount.value === "" ? null : +sf.amount.value, paydown: +sf.paydown.value || 0 };
+      toast("ההגדרה נשמרה"); commit();
     });
 
     const gf = $("#goalForm");

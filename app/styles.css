@@ -374,3 +374,29 @@ dialog[open] { animation: sheet .4s var(--ease); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 [data-role="advisor"].hidden { display: none; }
+
+/* ---------- cash flow ---------- */
+.nav { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 899px) { .nav-item { font-size: 11px; } }
+.salary-card { text-align: center; padding-top: 30px; padding-bottom: 28px; }
+.salary-card h2 { justify-content: center; color: var(--muted); font-size: 16px; margin-bottom: 4px; }
+.salary-amt { font-family: var(--num); font-weight: 200; font-size: 64px; line-height: 1.1; color: var(--mauve-ink); }
+.salary-when { margin: 6px 0 0; font-size: 17px; }
+.salary-card .note { max-width: 46ch; margin-inline: auto; }
+.section.warn { background: #FBF3EE; border-color: #EBD5CB; }
+.section.warn h2 { color: var(--bad); font-weight: 500; }
+.section.warn p { margin: 0 0 6px; }
+.section.warn b { font-family: var(--num); font-weight: 500; }
+.routine { display: flex; flex-direction: column; }
+.rday { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rday:last-child { border-bottom: none; }
+.rnum { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); font-family: var(--num); font-size: 15px; color: var(--muted); }
+.rnum.sal { background: var(--mauve-deep); border-color: var(--mauve-deep); color: #fff; }
+.rtext { padding-top: 5px; display: flex; flex-direction: column; gap: 3px; font-size: 15px; }
+.r-in { color: var(--good); }
+.r-note { color: var(--muted); font-size: 13.5px; }
+.list-month { font-size: 13px; color: var(--muted); padding: 14px 0 4px; letter-spacing: .02em; }
+.list-month:first-child { padding-top: 0; }
+.dchip { display: inline-block; min-width: 42px; font-family: var(--num); font-size: 13px; color: var(--muted); font-weight: 400; }
+.ev-salary .t { color: var(--mauve-ink); font-weight: 600; }
+.ev-salary { background: var(--mauve-mist); margin-inline: -22px; padding-inline: 22px; }

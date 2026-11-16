@@ -21,6 +21,7 @@
       <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
       <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5 10v7M9.7 10v7M14.3 10v7M19 10v7M3 20h18"/></symbol>
       <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+      <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.2"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-prev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
       <symbol id="i-next" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
@@ -43,7 +44,8 @@
 
   <nav class="nav" aria-label="ניווט ראשי">
     <button class="nav-item active" data-tab="flow"><svg class="i"><use href="#i-flow"/></svg><span class="lg-only">לאן הכסף הולך</span><span class="sm-only">הכסף שלי</span></button>
-    <button class="nav-item" data-tab="dashboard"><svg class="i"><use href="#i-target"/></svg><span>יעד ורווח</span></button>
+    <button class="nav-item" data-tab="cash"><svg class="i"><use href="#i-cal"/></svg><span>תזרים</span></button>
+    <button class="nav-item" data-tab="dashboard"><svg class="i"><use href="#i-target"/></svg><span class="lg-only">יעד ורווח</span><span class="sm-only">יעד</span></button>
     <button class="nav-item" data-tab="income"><svg class="i"><use href="#i-in"/></svg><span>הכנסות</span></button>
     <button class="nav-item" data-tab="expenses"><svg class="i"><use href="#i-out"/></svg><span>הוצאות</span></button>
     <button class="nav-item" data-tab="bank"><svg class="i"><use href="#i-bank"/></svg><span>ייבוא</span></button>
@@ -71,6 +73,36 @@
       <div class="section" id="flowInsightsWrap">
         <h2>כדאי לשים לב</h2>
         <div id="flowInsights"></div>
+      </div>
+    </section>
+
+    <!-- CASH FLOW -->
+    <section id="tab-cash" class="panel">
+      <div class="section salary-card" id="salaryCard"></div>
+      <div class="section warn" id="cashWarn"></div>
+      <div class="section">
+        <h2>היתרה בחשבון העסקי, צפי ל-3 חודשים</h2>
+        <div id="cashChart"></div>
+      </div>
+      <div class="flow-grid">
+        <div class="section">
+          <h2>החודש שלך, יום אחרי יום</h2>
+          <div id="cashRoutine"></div>
+        </div>
+        <div class="section">
+          <h2>מה צפוי בחשבון</h2>
+          <div id="cashList"></div>
+        </div>
+      </div>
+      <div class="section" data-role="advisor">
+        <h2>הגדרת משכורת</h2>
+        <form id="salaryForm" class="form">
+          <label class="field">יום בחודש<input type="number" name="day" min="1" max="28" inputmode="numeric"></label>
+          <label class="field">סכום (ריק = לפי ההמלצה)<input type="number" name="amount" min="0" step="250" inputmode="numeric"></label>
+          <label class="field">כמה להחזיר מהמינוס בחודש<input type="number" name="paydown" min="0" step="250" inputmode="numeric"></label>
+          <button class="btn primary" type="submit">שמירה</button>
+        </form>
+        <p class="note" id="cashModelNote"></p>
       </div>
     </section>
 
