@@ -2,73 +2,87 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ניהול פיננסי · דנה דרעי</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FBF7F5">
+  <title>Dana Deri · ניהול פיננסי</title>
+  <link rel="icon" href="assets/lotus.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-flow" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+      <symbol id="i-in" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+      <symbol id="i-out" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
+      <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 9.5 12 4l9 5.5M5 10v7M9.7 10v7M14.3 10v7M19 10v7M3 20h18"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-prev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    </defs>
+  </svg>
+
   <header class="top">
-    <div class="brand">
-      <span class="brand-mark">DD</span>
-      <div>
-        <div class="brand-name">Dana Deri Beauty Studio</div>
-        <div class="brand-sub">ניהול פיננסי · גרסת דמו</div>
-      </div>
+    <img class="wordmark" src="assets/logo-wordmark.png" alt="Dana Deri">
+    <div class="month-nav" aria-label="בחירת חודש">
+      <button class="icon-btn" id="monthPrev" aria-label="החודש הקודם"><svg class="i"><use href="#i-prev"/></svg></button>
+      <span id="monthTitle" aria-live="polite"></span>
+      <button class="icon-btn" id="monthNext" aria-label="החודש הבא"><svg class="i"><use href="#i-next"/></svg></button>
     </div>
-    <div class="top-controls">
-      <select id="monthSelect" aria-label="חודש"></select>
-      <select id="roleSelect" aria-label="תצוגה">
-        <option value="advisor">תצוגת יועצת</option>
-        <option value="client">תצוגת דנה דרעי</option>
-      </select>
-    </div>
+    <button class="icon-btn settings-btn" data-tab="settings" data-role="advisor" aria-label="הגדרות"><svg class="i"><use href="#i-settings"/></svg></button>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="flow">לאן הכסף הולך</button>
-    <button class="tab" data-tab="dashboard">יעדים ורווח</button>
-    <button class="tab" data-tab="income">הכנסות</button>
-    <button class="tab" data-tab="expenses">הוצאות</button>
-    <button class="tab" data-tab="bank">ייבוא מהבנק</button>
-    <button class="tab" data-tab="settings" data-role="advisor">הגדרות ויעדים</button>
+  <nav class="nav" aria-label="ניווט ראשי">
+    <button class="nav-item active" data-tab="flow"><svg class="i"><use href="#i-flow"/></svg><span class="lg-only">לאן הכסף הולך</span><span class="sm-only">הכסף שלי</span></button>
+    <button class="nav-item" data-tab="dashboard"><svg class="i"><use href="#i-target"/></svg><span>יעד ורווח</span></button>
+    <button class="nav-item" data-tab="income"><svg class="i"><use href="#i-in"/></svg><span>הכנסות</span></button>
+    <button class="nav-item" data-tab="expenses"><svg class="i"><use href="#i-out"/></svg><span>הוצאות</span></button>
+    <button class="nav-item" data-tab="bank"><svg class="i"><use href="#i-bank"/></svg><span>ייבוא</span></button>
   </nav>
 
   <main>
     <!-- MONEY FLOW -->
     <section id="tab-flow" class="panel active">
-      <div class="card hero">
-        <h2>לאן הכסף הולך – <span class="monthLabel"></span></h2>
+      <div class="flow-hero">
         <p class="headline" id="flowHeadline"></p>
         <div id="flowBar"></div>
-        <div class="legend flow-legend">
-          <span><i style="background:var(--c-vat)"></i>מע"מ</span><span><i style="background:var(--c-tax)"></i>מס וביטוח לאומי</span>
-          <span><i style="background:var(--c-biz)"></i>הוצאות עסק</span><span><i style="background:var(--c-loan)"></i>הלוואות</span>
-          <span><i style="background:var(--c-private)"></i>משיכות פרטיות</span><span><i style="background:var(--c-unknown)"></i>לא מסווג</span>
-          <span><i style="background:var(--c-left)"></i>נשאר</span>
-        </div>
+        <div class="flow-legend" id="flowLegend"></div>
       </div>
-      <div class="card"><div class="list-scroll" id="flowList"></div></div>
-      <div class="card"><h3>מה זה אומר</h3><div id="flowInsights"></div></div>
+      <div class="section">
+        <h2>מה נכנס ומה יצא</h2>
+        <div class="table-wrap" id="flowList"></div>
+      </div>
+      <div class="section" id="flowInsightsWrap">
+        <h2>כדאי לשים לב</h2>
+        <div id="flowInsights"></div>
+      </div>
     </section>
 
-    <!-- DASHBOARD -->
+    <!-- GOAL & PROFIT -->
     <section id="tab-dashboard" class="panel">
-      <div class="kpis" id="kpis"></div>
-      <div class="card" id="goalCard"></div>
-      <div class="grid2">
-        <div class="card">
-          <h3>הכנסות, הוצאות ורווח לפי חודש</h3>
+      <div class="section goal" id="goalCard"></div>
+      <div class="stats" id="kpis"></div>
+      <div class="split">
+        <div class="section">
+          <h2>הכנסה, הוצאות ורווח לפי חודש</h2>
           <div id="trendChart"></div>
         </div>
-        <div class="card">
-          <h3>פילוח הוצאות החודש</h3>
+        <div class="section">
+          <h2>הוצאות העסק החודש</h2>
           <div id="expenseBreakdown"></div>
         </div>
       </div>
-      <div class="card">
-        <h3>דוח רווח והפסד – <span id="plMonth"></span></h3>
+      <div class="section">
+        <h2>רווח והפסד</h2>
         <table class="pl" id="plTable"></table>
         <p class="note" id="plNote"></p>
       </div>
@@ -76,114 +90,102 @@
 
     <!-- INCOME -->
     <section id="tab-income" class="panel">
-      <div class="card">
-        <h3>הזנת הכנסה</h3>
-        <form id="incomeForm" class="form">
-          <label>תאריך<input type="date" name="date" required></label>
-          <label>סוג
-            <select name="kind">
-              <option value="day">יום עבודה</option>
-              <option value="month">סיכום חודשי (ללא פירוט יומי)</option>
-            </select>
-          </label>
-          <label>עיר
-            <select name="city">
-              <option value="">לא צוין</option>
-              <option>ראשון לציון</option>
-              <option>מודיעין</option>
-            </select>
-          </label>
-          <label>סכום (₪, כולל מע"מ)<input type="number" name="amount" min="0" step="1" required inputmode="numeric"></label>
-          <label class="wide">הערה<input type="text" name="note" placeholder="למשל: 11 גבות ושפם, 5 עיצובי גבות"></label>
-          <button class="btn primary" type="submit">הוספה</button>
-        </form>
-      </div>
-      <div class="card">
-        <h3>הכנסות – <span class="monthLabel"></span></h3>
+      <div class="section">
+        <div class="section-head">
+          <h2>הכנסות החודש</h2>
+          <button class="btn primary" data-quick="income"><svg class="i"><use href="#i-plus"/></svg>הכנסה</button>
+        </div>
         <div id="incomeList"></div>
+      </div>
+      <div class="section">
+        <h2><svg class="i"><use href="#i-chat"/></svg>הדבקה מוואטסאפ</h2>
+        <p class="note">מעתיקים את הודעות הדיווח מהקבוצה, או קובץ ייצוא של הצ'אט, ומדביקים כאן. המערכת מזהה תאריך וסכום, ואפשר לתקן לפני השמירה.</p>
+        <textarea id="waText" rows="4" placeholder="16/11/2026, 10:21 - דנה דרעי: 2040₪ 11 גבות שפם 5 גבות"></textarea>
+        <div class="row"><button class="btn" id="waParse">זיהוי הכנסות</button></div>
+        <div id="waPreview"></div>
       </div>
     </section>
 
     <!-- EXPENSES -->
     <section id="tab-expenses" class="panel">
-      <div class="card">
-        <h3>הוספת הוצאה</h3>
-        <form id="expenseForm" class="form">
-          <label>סוג
-            <select name="type">
-              <option value="variable">משתנה / חד-פעמית</option>
-              <option value="fixed">קבועה (חוזרת כל חודש)</option>
-            </select>
-          </label>
-          <label>תיאור<input type="text" name="name" required placeholder="למשל: הזמנת חומרים"></label>
-          <label>קטגוריה<select name="category" id="categorySelect"></select></label>
-          <label>סכום (₪)<input type="number" name="amount" min="0" step="1" required inputmode="numeric"></label>
-          <label class="date-field">תאריך<input type="date" name="date"></label>
-          <label class="check"><input type="checkbox" name="vat" checked> כולל מע"מ מוכר</label>
-          <button class="btn primary" type="submit">הוספה</button>
-        </form>
-      </div>
-      <div class="card">
-        <h3>הוצאות קבועות (חודשיות)</h3>
-        <div id="fixedList"></div>
-      </div>
-      <div class="card">
-        <h3>הוצאות משתנות – <span class="monthLabel"></span></h3>
+      <div class="section">
+        <div class="section-head">
+          <h2>הוצאות משתנות החודש</h2>
+          <button class="btn primary" data-quick="expense"><svg class="i"><use href="#i-plus"/></svg>הוצאה</button>
+        </div>
         <div id="variableList"></div>
+      </div>
+      <div class="section">
+        <h2>הוצאות קבועות</h2>
+        <p class="note">נספרות בכל חודש החל מהחודש שבו נוספו.</p>
+        <div id="fixedList"></div>
       </div>
     </section>
 
-    <!-- BANK IMPORT -->
+    <!-- BANK / CARD IMPORT -->
     <section id="tab-bank" class="panel">
-      <div class="card">
-        <h3>ייבוא תנועות מחשבון הבנק העסקי</h3>
-        <p class="note">מייצאים מאתר הבנק את תנועות העו"ש לקובץ CSV, עם העמודות תאריך, תיאור, חובה וזכות. המערכת מסווגת את התנועות לפי כללים, ואת מה שהיא לא מזהה מסמנים פעם אחת. אחרי זה היא זוכרת. השלב הבא: חיבור ישיר לבנק.</p>
-        <div class="row" style="margin-top:12px">
-          <label class="btn primary">בחירת קובץ CSV<input type="file" id="bankFile" accept=".csv,text/csv" hidden></label>
-          <button class="btn" id="sampleBtn">טעינת קובץ דוגמה</button>
+      <div class="section">
+        <h2>ייבוא מהבנק ומכרטיס האשראי</h2>
+        <label class="drop" id="dropZone">
+          <svg class="i i-lg"><use href="#i-file"/></svg>
+          <b>גוררים לכאן קבצים, או לוחצים לבחירה</b>
+          <span>Excel או CSV, כמו שהם יוצאים מאתר הבנק או מחברת האשראי. אפשר כמה קבצים יחד.</span>
+          <input type="file" id="bankFile" accept=".csv,.xls,.xlsx,text/csv" multiple hidden>
+        </label>
+        <div class="row">
+          <button class="btn ghost" id="sampleBtn">ניסיון עם קובץ דוגמה</button>
         </div>
-        <p class="note" id="importResult"></p>
+        <p class="note" id="importResult" role="status"></p>
       </div>
-      <div class="card">
-        <h3>השוואה – <span class="monthLabel"></span></h3>
+      <div class="section">
+        <h2>בנק מול דיווח</h2>
         <div id="bankCompare"></div>
       </div>
-      <div class="card">
-        <h3>תנועות מהבנק – <span class="monthLabel"></span></h3>
+      <div class="section">
+        <h2>תנועות החודש</h2>
         <div id="bankList"></div>
       </div>
-      <div class="card">
-        <h3>כללי סיווג</h3>
-        <p class="note">כשמשנים קטגוריה לתנועה מהבנק, נוצר כלל חדש לתיאור הזה.</p>
+      <div class="section">
+        <h2>כללי סיווג</h2>
+        <p class="note">כשמשנים קטגוריה לתנועה מיובאת, המערכת לומדת את התיאור ומסווגת תנועות דומות לבד.</p>
         <div id="rulesList"></div>
       </div>
     </section>
 
     <!-- SETTINGS -->
     <section id="tab-settings" class="panel">
-      <div class="card">
-        <h3>יעדי מחזור חודשיים</h3>
+      <div class="section">
+        <h2>תצוגה</h2>
+        <label class="field">מי משתמשת עכשיו
+          <select id="roleSelect">
+            <option value="advisor">דנה ישעיה – יועצת</option>
+            <option value="client">דנה דרעי</option>
+          </select>
+        </label>
+      </div>
+      <div class="section">
+        <h2>יעדי מחזור</h2>
         <form id="goalForm" class="form">
-          <label>חודש<input type="month" name="month" required></label>
-          <label>יעד (₪)<input type="number" name="goal" min="0" step="100" required></label>
-          <label>ימי עבודה מתוכננים בחודש<input type="number" name="workdays" min="0" max="31"></label>
-          <button class="btn primary" type="submit">שמירה</button>
+          <label class="field">חודש<input type="month" name="month" required></label>
+          <label class="field">יעד (₪)<input type="number" name="goal" min="0" step="100" required inputmode="numeric"></label>
+          <label class="field">ימי עבודה שנותרו<input type="number" name="workdays" min="0" max="31" inputmode="numeric"></label>
+          <button class="btn primary" type="submit">שמירת יעד</button>
         </form>
         <div id="goalList"></div>
       </div>
-      <div class="card">
-        <h3>מע"מ ומסים</h3>
+      <div class="section">
+        <h2>מע"מ ומסים</h2>
         <form id="vatForm" class="form">
-          <label class="check"><input type="checkbox" name="licensed"> עוסקת מורשה (המחירים כוללים מע"מ)</label>
-          <label>שיעור מע"מ (%)<input type="number" name="rate" min="0" max="30" step="0.5"></label>
-          <label>הפרשה למס הכנסה וביטוח לאומי (% מההכנסה)<input type="number" name="tax" min="0" max="60" step="0.5"></label>
+          <label class="check"><input type="checkbox" name="licensed"> עוסקת מורשה, המחירים כוללים מע"מ</label>
+          <label class="field">שיעור מע"מ (%)<input type="number" name="rate" min="0" max="30" step="0.5"></label>
+          <label class="field">הפרשה למס הכנסה וביטוח לאומי (%)<input type="number" name="tax" min="0" max="60" step="0.5"></label>
           <button class="btn" type="submit">שמירה</button>
         </form>
-        <p class="note">אם לא נרשמו תשלומי מסים בפועל, המערכת מציגה הפרשה מוערכת לפי האחוז הזה. את האחוז האמיתי צריך לבדוק עם רואה החשבון.</p>
+        <p class="note">כל עוד לא נרשמו תשלומים בפועל, מוצגת הפרשה לפי האחוז הזה. את האחוז האמיתי בודקים עם רואה החשבון.</p>
       </div>
-      <div class="card">
-        <h3>גיבוי ונתונים</h3>
-        <p class="note">בדמו הנתונים נשמרים בדפדפן בלבד. כדי להעביר נתונים בין המכשירים שלכן, מייצאים קובץ ושולחים אותו.</p>
+      <div class="section">
+        <h2>גיבוי</h2>
+        <p class="note">הנתונים נשמרים בדפדפן הזה בלבד. כדי להעביר אותם למכשיר אחר מייצאים קובץ ופותחים אותו שם.</p>
         <div class="row">
           <button class="btn" id="exportBtn">ייצוא קובץ</button>
           <label class="btn">ייבוא קובץ<input type="file" id="importInput" accept="application/json" hidden></label>
@@ -193,7 +195,41 @@
     </section>
   </main>
 
-  <footer class="foot">גרסת דמו 0.2 · הוצאות הדוגמה הן נתוני דמה ומסומנות ב־<span class="tag demo">דמו</span></footer>
+  <button class="fab" id="fab" aria-label="הוספה מהירה"><svg class="i"><use href="#i-plus"/></svg></button>
+
+  <dialog id="quick" aria-labelledby="quickTitle">
+    <form id="quickForm" method="dialog">
+      <div class="sheet-head">
+        <h2 id="quickTitle">הוספה מהירה</h2>
+        <button type="button" class="icon-btn" id="quickClose" aria-label="סגירה"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="kind" value="income" checked><span>הכנסה</span></label>
+        <label><input type="radio" name="kind" value="expense"><span>הוצאה</span></label>
+      </div>
+      <label class="amount">
+        <span class="sr">סכום</span>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="0" required>
+        <span class="cur">₪</span>
+      </label>
+      <div class="form">
+        <label class="field">תאריך<input type="date" name="date" required></label>
+        <label class="field only-income">עיר
+          <select name="city"><option value="">לא צוין</option><option>ראשון לציון</option><option>מודיעין</option></select>
+        </label>
+        <label class="field only-income">סוג
+          <select name="incomeKind"><option value="day">יום עבודה</option><option value="month">סיכום חודשי</option></select>
+        </label>
+        <label class="field only-expense">קטגוריה<select name="category" id="categorySelect"></select></label>
+        <label class="field wide"><span class="only-income">הערה</span><span class="only-expense">תיאור</span><input type="text" name="note" placeholder=""></label>
+        <label class="check only-expense"><input type="checkbox" name="fixed"> חוזרת כל חודש</label>
+        <label class="check only-expense"><input type="checkbox" name="vat" checked> כולל מע"מ מוכר</label>
+      </div>
+      <button class="btn primary block" type="submit">שמירה</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
