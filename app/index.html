@@ -27,15 +27,34 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="dashboard">דשבורד</button>
+    <button class="tab active" data-tab="flow">לאן הכסף הולך</button>
+    <button class="tab" data-tab="dashboard">יעדים ורווח</button>
     <button class="tab" data-tab="income">הכנסות</button>
     <button class="tab" data-tab="expenses">הוצאות</button>
+    <button class="tab" data-tab="bank">ייבוא מהבנק</button>
     <button class="tab" data-tab="settings" data-role="advisor">הגדרות ויעדים</button>
   </nav>
 
   <main>
+    <!-- MONEY FLOW -->
+    <section id="tab-flow" class="panel active">
+      <div class="card hero">
+        <h2>לאן הכסף הולך – <span class="monthLabel"></span></h2>
+        <p class="headline" id="flowHeadline"></p>
+        <div id="flowBar"></div>
+        <div class="legend flow-legend">
+          <span><i style="background:var(--c-vat)"></i>מע"מ</span><span><i style="background:var(--c-tax)"></i>מס וביטוח לאומי</span>
+          <span><i style="background:var(--c-biz)"></i>הוצאות עסק</span><span><i style="background:var(--c-loan)"></i>הלוואות</span>
+          <span><i style="background:var(--c-private)"></i>משיכות פרטיות</span><span><i style="background:var(--c-unknown)"></i>לא מסווג</span>
+          <span><i style="background:var(--c-left)"></i>נשאר</span>
+        </div>
+      </div>
+      <div class="card"><div class="list-scroll" id="flowList"></div></div>
+      <div class="card"><h3>מה זה אומר</h3><div id="flowInsights"></div></div>
+    </section>
+
     <!-- DASHBOARD -->
-    <section id="tab-dashboard" class="panel active">
+    <section id="tab-dashboard" class="panel">
       <div class="kpis" id="kpis"></div>
       <div class="card" id="goalCard"></div>
       <div class="grid2">
@@ -114,6 +133,32 @@
       </div>
     </section>
 
+    <!-- BANK IMPORT -->
+    <section id="tab-bank" class="panel">
+      <div class="card">
+        <h3>ייבוא תנועות מחשבון הבנק העסקי</h3>
+        <p class="note">מייצאים מאתר הבנק את תנועות העו"ש לקובץ CSV, עם העמודות תאריך, תיאור, חובה וזכות. המערכת מסווגת את התנועות לפי כללים, ואת מה שהיא לא מזהה מסמנים פעם אחת. אחרי זה היא זוכרת. השלב הבא: חיבור ישיר לבנק.</p>
+        <div class="row" style="margin-top:12px">
+          <label class="btn primary">בחירת קובץ CSV<input type="file" id="bankFile" accept=".csv,text/csv" hidden></label>
+          <button class="btn" id="sampleBtn">טעינת קובץ דוגמה</button>
+        </div>
+        <p class="note" id="importResult"></p>
+      </div>
+      <div class="card">
+        <h3>השוואה – <span class="monthLabel"></span></h3>
+        <div id="bankCompare"></div>
+      </div>
+      <div class="card">
+        <h3>תנועות מהבנק – <span class="monthLabel"></span></h3>
+        <div id="bankList"></div>
+      </div>
+      <div class="card">
+        <h3>כללי סיווג</h3>
+        <p class="note">כשמשנים קטגוריה לתנועה מהבנק, נוצר כלל חדש לתיאור הזה.</p>
+        <div id="rulesList"></div>
+      </div>
+    </section>
+
     <!-- SETTINGS -->
     <section id="tab-settings" class="panel">
       <div class="card">
@@ -127,12 +172,14 @@
         <div id="goalList"></div>
       </div>
       <div class="card">
-        <h3>מע"מ</h3>
+        <h3>מע"מ ומסים</h3>
         <form id="vatForm" class="form">
           <label class="check"><input type="checkbox" name="licensed"> עוסקת מורשה (המחירים כוללים מע"מ)</label>
           <label>שיעור מע"מ (%)<input type="number" name="rate" min="0" max="30" step="0.5"></label>
+          <label>הפרשה למס הכנסה וביטוח לאומי (% מההכנסה)<input type="number" name="tax" min="0" max="60" step="0.5"></label>
           <button class="btn" type="submit">שמירה</button>
         </form>
+        <p class="note">אם לא נרשמו תשלומי מסים בפועל, המערכת מציגה הפרשה מוערכת לפי האחוז הזה. את האחוז האמיתי צריך לבדוק עם רואה החשבון.</p>
       </div>
       <div class="card">
         <h3>גיבוי ונתונים</h3>
@@ -146,7 +193,7 @@
     </section>
   </main>
 
-  <footer class="foot">גרסת דמו 0.1 · הוצאות הדוגמה הן נתוני דמה ומסומנות ב־<span class="tag demo">דמו</span></footer>
+  <footer class="foot">גרסת דמו 0.2 · הוצאות הדוגמה הן נתוני דמה ומסומנות ב־<span class="tag demo">דמו</span></footer>
 
   <script src="app.js"></script>
 </body>
