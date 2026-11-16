@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "dana-deri-finance-v2";
+  const STORAGE_KEY = "dana-deri-finance-v3";
 
   // Category -> group. Groups drive the "where did the money go" view.
   const CATS = {
@@ -11,7 +11,8 @@
     "השתלמויות": "biz", "עמלות בנק ואשראי": "biz", "אחר": "biz",
     "הלוואות": "loan",
     "תשלום מע\"מ": "vat", "מקדמות מס וביטוח לאומי": "tax",
-    "משיכה פרטית": "private",
+    "ציוד": "biz",
+    "משיכה פרטית": "private", "קניות אישיות": "private", "ביטוח אישי": "private",
     "חיוב כרטיס אשראי": "skip",
     "לא מסווג": "unknown",
   };
@@ -26,11 +27,31 @@
     ["כספומט", "משיכה פרטית"], ["משיכת מזומן", "משיכה פרטית"],
     ["ישראכרט", "חיוב כרטיס אשראי"], ["כאל", "חיוב כרטיס אשראי"], ["מקס איט", "חיוב כרטיס אשראי"],
     ["max it", "חיוב כרטיס אשראי"], ["לאומי קארד", "חיוב כרטיס אשראי"], ["אמריקן אקספרס", "חיוב כרטיס אשראי"], ["דיינרס", "חיוב כרטיס אשראי"],
+    ["רואה חשבון", "הנהלת חשבונות"], ["קוסמטיק", "חומרים לטיפולים"], ["זינגבוים", "חומרים לטיפולים"],
+    ["אלקטרו", "ציוד"], ["פנגו", "נסיעות ורכב"], ["ביטוח חיים", "ביטוח אישי"],
     ["הלוואה", "הלוואות"], ["עמלה", "עמלות בנק ואשראי"], ["עמלת", "עמלות בנק ואשראי"],
     ["דלק", "נסיעות ורכב"], ["פז ", "נסיעות ורכב"], ["סונול", "נסיעות ורכב"], ["דור אלון", "נסיעות ורכב"],
     ["facebook", "שיווק"], ["meta", "שיווק"], ["easy", "תוכנה ותקשורת"],
     ["בזק", "תוכנה ותקשורת"], ["פרטנר", "תוכנה ותקשורת"], ["סלקום", "תוכנה ותקשורת"],
   ].map(([keyword, category]) => ({ keyword, category }));
+
+  // Card-company category -> ours (used only when no rule matches).
+  const EXT_CATS = {
+    "קוסמטיקה וטיפוח": "חומרים לטיפולים", "דלק, חשמל וגז": "נסיעות ורכב", "תחבורה ורכבים": "נסיעות ורכב",
+    "שירותי תקשורת": "תוכנה ותקשורת", "ביטוח": "ביטוח ורישוי", "מסעדות, קפה וברים": "קניות אישיות",
+    "מזון וצריכה": "קניות אישיות", "אופנה": "קניות אישיות", "פנאי, בידור וספורט": "קניות אישיות",
+  };
+  function categorizeWith(rules, desc, extCat) {
+    const d = String(desc).toLowerCase();
+    const r = rules.find((x) => d.includes(x.keyword.toLowerCase()));
+    return r ? r.category : (EXT_CATS[extCat] || "לא מסווג");
+  }
+  const instOf = (note) => { const m = String(note || "").match(/תשלום (\d+) מתוך (\d+)/); return m ? { n: +m[1], t: +m[2] } : null; };
+  function cardItem(rules, r) {
+    const category = categorizeWith(rules, r.name, r.extCat);
+    return { id: uid(), date: r.date, txDate: r.txDate, name: r.name, note: r.note || "", inst: instOf(r.note),
+      category, amount: r.amount, vat: CATS[category] === "biz", source: "bank", card: true };
+  }
 
   // Fake bank export used by the "load sample" button. Not real transactions.
   const SAMPLE_CSV = `תאריך,תיאור,חובה,זכות
@@ -69,24 +90,8 @@
         { id: uid(), date: "2026-11-14", kind: "month", city: "", amount: 10800, note: "סך הכל עד 14.11 (כולל 1,400 ₪ ב-10.11)" },
         { id: uid(), date: "2026-11-15", kind: "day", city: "", amount: 2040, note: "11 גבות ושפם, 5 עיצובי גבות (דווח 16.11)" },
       ],
-      fixed: [
-        { id: uid(), name: "שכירות חדר – ראשון לציון", category: "שכירות", amount: 2500, vat: false, start: "2026-08", demo: true },
-        { id: uid(), name: "שכירות חדר – מודיעין", category: "שכירות", amount: 3000, vat: false, start: "2026-08", demo: true },
-        { id: uid(), name: "הנהלת חשבונות", category: "הנהלת חשבונות", amount: 700, vat: true, start: "2026-08", demo: true },
-        { id: uid(), name: "ביטוח אחריות מקצועית", category: "ביטוח ורישוי", amount: 350, vat: false, start: "2026-08", demo: true },
-        { id: uid(), name: "יומן תורים ו-Easy Bizy", category: "תוכנה ותקשורת", amount: 150, vat: true, start: "2026-08", demo: true },
-        { id: uid(), name: "טלפון ואינטרנט", category: "תוכנה ותקשורת", amount: 200, vat: true, start: "2026-08", demo: true },
-        { id: uid(), name: "שיווק ופרסום", category: "שיווק", amount: 800, vat: true, start: "2026-08", demo: true },
-        { id: uid(), name: "נסיעות בין הערים", category: "נסיעות ורכב", amount: 1500, vat: false, start: "2026-08", demo: true },
-        { id: uid(), name: "החזר הלוואה", category: "הלוואות", amount: 1300, vat: false, start: "2026-08", demo: true },
-      ],
-      variable: [
-        { id: uid(), date: "2026-11-05", name: "הזמנת חומרים", category: "חומרים לטיפולים", amount: 900, vat: true, demo: true },
-        { id: uid(), date: "2026-11-08", name: "רכש תכשירים למכירה", category: "מוצרים למכירה", amount: 1200, vat: true, demo: true },
-        { id: uid(), date: "2026-10-12", name: "הזמנת חומרים", category: "חומרים לטיפולים", amount: 1100, vat: true, demo: true },
-        { id: uid(), date: "2026-10-20", name: "משיכות למזומן ולחשבון הפרטי", category: "משיכה פרטית", amount: 4000, vat: false, demo: true },
-        { id: uid(), date: "2026-08-20", name: "הזמנת חומרים", category: "חומרים לטיפולים", amount: 950, vat: true, demo: true },
-      ],
+      fixed: [],
+      variable: (window.SEED_CARD || []).map((r) => cardItem(DEFAULT_RULES, r)),
       bankCredits: [],
       rules: DEFAULT_RULES.slice(),
     };
@@ -186,13 +191,38 @@
     Object.entries(biz).sort((a, b) => b[1] - a[1]).forEach(([cat, amt]) => steps.push({ label: cat, amount: amt, group: "biz" }));
 
     const loans = sumGroup("loan"); if (loans) steps.push({ label: "החזרי הלוואות", amount: loans, group: "loan" });
-    const priv = sumGroup("private"); if (priv) steps.push({ label: "משיכות פרטיות", amount: priv, group: "private" });
+    const priv = sumGroup("private"); if (priv) steps.push({ label: "אישי ומשיכות", amount: priv, group: "private" });
     const unk = sumGroup("unknown"); if (unk) steps.push({ label: "לא מסווג – צריך לברר", amount: unk, group: "unknown" });
 
     const skipped = sumGroup("skip");
     const out = steps.reduce((s, x) => s + x.amount, 0);
     const left = gross - out;
-    return { gross, steps, out, left, hasDemo: all.some((e) => e.demo), unknownCount: all.filter((e) => groupOf(e.category) === "unknown").length, skipped };
+    return { gross, steps, out, left, hasDemo: all.some((e) => e.demo), unknownCount: all.filter((e) => groupOf(e.category) === "unknown").length, skipped,
+      // Without a checking-account (עו"ש) statement we only see card spending; the rest is not "left", it is unexplained.
+      hasAccount: state.bankCredits.some((c) => monthOf(c.date) === m) || all.some((e) => e.source === "bank" && !e.card),
+      cardTotal: all.filter((e) => e.card).reduce((s, e) => s + e.amount, 0) };
+  }
+
+  // Future installments already committed on the card (latest statement per purchase).
+  function commitments() {
+    const latest = {};
+    state.variable.filter((e) => e.inst && e.inst.n < e.inst.t).forEach((e) => {
+      const k = e.name + "|" + (e.txDate || "") + "|" + e.inst.t;
+      if (!latest[k] || latest[k].inst.n < e.inst.n) latest[k] = e;
+    });
+    // drop purchases whose later installment already appears as fully paid
+    const items = Object.values(latest).filter((e) => !state.variable.some((x) => x.inst && x.name === e.name && x.txDate === e.txDate && x.inst.n === x.inst.t));
+    const byMonth = {};
+    items.forEach((e) => {
+      const [y, mo] = e.date.split("-").map(Number);
+      for (let k = 1; k <= e.inst.t - e.inst.n; k++) {
+        const d = new Date(y, mo - 1 + k, 1);
+        const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        byMonth[m] = (byMonth[m] || 0) + e.amount;
+      }
+    });
+    const total = items.reduce((s, e) => s + e.amount * (e.inst.t - e.inst.n), 0);
+    return { items, byMonth, total };
   }
 
   // ---------- render ----------
@@ -222,20 +252,25 @@
     const r = moneyFlow(currentMonth);
     const per100 = (v) => (r.gross ? Math.round((v / r.gross) * 100) : 0);
     if (!r.gross) {
-      $("#flowHeadline").innerHTML = `עוד אין הכנסות ב${monthName(currentMonth)}.<span class="left-big">מוסיפים הכנסה או מייבאים מהבנק</span>`;
+      $("#flowHeadline").innerHTML = r.cardTotal
+        ? `ב${monthName(currentMonth)} יצאו בכרטיס האשראי<span class="left-big">${fmt(r.cardTotal)}</span><small>אין דיווח הכנסות לחודש הזה, ולכן אי אפשר לחשב כמה נשאר.</small>`
+        : `עוד אין הכנסות ב${monthName(currentMonth)}.<span class="left-big">מוסיפים הכנסה או מייבאים מהבנק</span>`;
       $("#flowBar").innerHTML = ""; $("#flowLegend").innerHTML = "";
       $("#flowList").innerHTML = `<p class="empty">כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל.</p>`;
       $("#flowInsightsWrap").style.display = "none";
       return;
     }
-    $("#flowHeadline").innerHTML = r.left >= 0
+    const unexplained = !r.hasAccount && r.left > 0;
+    $("#flowHeadline").innerHTML = unexplained
+      ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ומתוכם אנחנו יודעים לאן הלכו <b>${fmt(r.out)}</b>. על השאר עוד אין פירוט<span class="left-big">${fmt(r.left)}</span><small>כדי לדעת לאן הלך הסכום הזה, צריך את דף העו"ש של החודש.</small>`
+      : r.left >= 0
       ? `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>. אחרי כל מה שיצא נשארו לך<span class="left-big">${fmt(r.left)}</span>`
       : `ב${monthName(currentMonth)} נכנסו <b>${fmt(r.gross)}</b>, ויצא יותר ממה שנכנס<span class="left-big">${fmt(r.left)}</span>`;
 
     const groups = {};
     r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
     if (r.left > 0) groups.left = r.left;
-    const NAMES = { vat: "מע\"מ", tax: "מס וביטוח לאומי", biz: "הוצאות העסק", loan: "הלוואות", private: "משיכות פרטיות", unknown: "לא מסווג", left: "נשאר לך" };
+    const NAMES = { vat: "מע\"מ", tax: "מס וביטוח לאומי", biz: "הוצאות העסק", loan: "הלוואות", private: "אישי ומשיכות", unknown: "לא מסווג", left: unexplained ? "עוד לא ידוע" : "נשאר לך" };
     const order = ["vat", "tax", "biz", "loan", "private", "unknown", "left"].filter((g) => groups[g] > 0);
     const total = Math.max(r.gross, r.out);
     $("#flowBar").innerHTML = `<div class="stack" role="img" aria-label="חלוקת ההכנסה">${order.map((g) =>
@@ -250,7 +285,7 @@
         <td>${dot(s.group)}<span>${esc(s.label)}${s.estimate ? ' <span class="tag">הערכה</span>' : ""}</span></td>
         <td class="num">${fmt(-s.amount)}</td><td class="num hide-sm muted-col">${per100(s.amount)}</td>
         <td class="num ${running < 0 ? "neg" : ""}">${fmt(running)}</td></tr>`; }).join("")}
-      <tr class="total"><td>נשאר לך</td><td class="num ${r.left >= 0 ? "pos" : "neg"}">${fmt(r.left)}</td><td class="num hide-sm">${per100(r.left)}</td><td></td></tr>
+      <tr class="total"><td>${unexplained ? "עוד לא ידוע לאן" : "נשאר לך"}</td><td class="num ${unexplained ? "" : r.left >= 0 ? "pos" : "neg"}">${fmt(r.left)}</td><td class="num hide-sm">${per100(r.left)}</td><td></td></tr>
     </table>`;
 
     const notMine = (groups.vat || 0) + (groups.tax || 0);
@@ -258,7 +293,9 @@
     const tips = [];
     if (notMine) tips.push(`<b>${fmt(notMine)}</b> (${per100(notMine)} ₪ מכל 100 ₪) הם מע"מ ומסים. הכסף הזה נכנס לחשבון אבל הוא לא שלך. מעבירים אותו לחשבון נפרד ביום שהוא נכנס, וכך מה שנשאר בעו"ש הוא באמת שלך.`);
     if (bizTop) tips.push(`ההוצאה העסקית הגדולה ביותר היא <b>${esc(bizTop.label)}</b>: ${fmt(bizTop.amount)}, כלומר ${per100(bizTop.amount)} ₪ מכל 100 ₪.`);
-    if (groups.private) tips.push(`משיכות פרטיות: <b>${fmt(groups.private)}</b>. משכורת קבועה לעצמך, באותו יום בכל חודש, עדיפה על משיכות לפי הצורך.`);
+    if (groups.private) tips.push(`הוצאות אישיות ומשיכות: <b>${fmt(groups.private)}</b>. קפה, אוכל וקניות קטנות בכרטיס העסקי מתערבבים עם העסק. משכורת קבועה לעצמך וכרטיס פרטי נפרד עושים סדר.`);
+    const cm = commitments(); const nextM = Object.keys(cm.byMonth).sort()[0];
+    if (cm.total) tips.push(`בכרטיס כבר רשומים תשלומים עתידיים בסך <b>${fmt(cm.total)}</b>. ב${monthName(nextM)} ייצאו <b>${fmt(cm.byMonth[nextM])}</b> עוד לפני שנכנס שקל אחד.`);
     if (r.unknownCount) tips.push(`<b>${r.unknownCount}</b> תנועות עוד לא מסווגות. מסווגים אותן במסך הייבוא.`);
     if (r.skipped) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
     if (r.hasDemo) tips.push(`<span class="tag demo">דמו</span> חלק מההוצאות בחודש הזה הן נתוני דמה, עד שיגיעו הנתונים האמיתיים.`);
@@ -441,11 +478,7 @@
   }
   const parseNum = (v) => { if (typeof v === "number") return v; const n = parseFloat(String(v || "").replace(/[₪,\s]/g, "")); return isFinite(n) ? n : 0; };
 
-  function categorize(desc) {
-    const d = desc.toLowerCase();
-    const r = state.rules.find((x) => d.includes(x.keyword.toLowerCase()));
-    return r ? r.category : "לא מסווג";
-  }
+  const categorize = (desc, extCat) => categorizeWith(state.rules, desc, extCat);
 
   // rows: array of arrays (from CSV or Excel). Works for bank statements and credit-card statements.
   function importRows(rows, src) {
@@ -458,22 +491,29 @@
     const iCredit = col("זכות");
     const iAmount = h.findIndex((c, i) => c.includes("סכום") && i !== iDebit);
     const isCard = iCredit < 0 && h.some((c) => /חיוב|בית עסק|בית העסק/.test(c));
+    const iBill = h.findIndex((c) => c.includes("תאריך חיוב")), iNote = col("הערות"), iCat = col("קטגוריה");
     if (iDesc < 0 || (iDebit < 0 && iAmount < 0)) throw new Error(`ב-${src} לא זוהו עמודות תיאור וסכום`);
-    const key = (d, desc, a) => `${d}|${desc}|${a}`;
-    const seen = new Set([...state.variable.filter((e) => e.source === "bank").map((e) => key(e.date, e.name, e.amount)),
-      ...state.bankCredits.map((c) => key(c.date, c.desc, c.amount))]);
+    const key = (d, desc, a, n = "") => `${d}|${desc}|${a}|${n}`;
+    // Multiset: identical rows inside one file are real (two coffees on the same day); only rows already stored count as duplicates.
+    const existing = {};
+    [...state.variable.filter((e) => e.source === "bank").map((e) => key(e.date, e.name, e.amount, e.note)),
+      ...state.bankCredits.map((c) => key(c.date, c.desc, c.amount))].forEach((k) => { existing[k] = (existing[k] || 0) + 1; });
+    const inFile = {};
+    const seen = { has: (k) => (inFile[k] = (inFile[k] || 0) + 1) <= (existing[k] || 0), add: () => {} };
     let added = 0, credits = 0, skipped = 0, last = null;
     rows.slice(hi + 1).forEach((r) => {
-      const date = parseDate(r[iDate]); if (!date) return;
-      const desc = String(r[iDesc] || "").trim();
+      // Card rows are dated by billing date: that is when the money actually leaves the account.
+      const date = (isCard && iBill >= 0 && parseDate(r[iBill])) || parseDate(r[iDate]); if (!date) return;
+      const desc = String(r[iDesc] || "").trim().split(/\s+/).join(" ");
+      const note = iNote >= 0 ? String(r[iNote] || "").trim() : "";
       let debit = iDebit >= 0 ? parseNum(r[iDebit]) : 0, credit = iCredit >= 0 ? parseNum(r[iCredit]) : 0;
       if (iDebit < 0 && iAmount >= 0) { const a = parseNum(r[iAmount]); if (isCard) debit = a; else if (a < 0) debit = -a; else credit = a; }
       if (isCard && debit < 0) { credit = -debit; debit = 0; } // refund on a card is not income
       if (debit > 0) {
-        if (seen.has(key(date, desc, debit))) { skipped++; return; }
-        const category = categorize(desc);
-        state.variable.push({ id: uid(), date, name: desc, category, amount: debit, vat: groupOf(category) === "biz", source: "bank" });
-        seen.add(key(date, desc, debit)); added++; last = date;
+        if (seen.has(key(date, desc, debit, note))) { skipped++; return; }
+        if (isCard) state.variable.push(cardItem(state.rules, { date, txDate: parseDate(r[iDate]), name: desc, amount: debit, extCat: iCat >= 0 ? r[iCat] : "", note }));
+        else { const category = categorize(desc); state.variable.push({ id: uid(), date, name: desc, note, category, amount: debit, vat: groupOf(category) === "biz", source: "bank" }); }
+        seen.add(key(date, desc, debit, note)); added++; last = date;
       } else if (credit > 0 && !isCard) {
         if (seen.has(key(date, desc, credit))) { skipped++; return; }
         state.bankCredits.push({ id: uid(), date, desc, amount: credit });
@@ -506,7 +546,8 @@
     }
     if (last) currentMonth = monthOf(last);
     $("#importResult").textContent = [
-      added || credits ? `יובאו ${added} הוצאות ו-${credits} זיכויים${skipped ? `, ${skipped} כפולים דולגו` : ""}.` : "",
+      added || credits ? `יובאו ${added} הוצאות ו-${credits} זיכויים${skipped ? `, ${skipped} כפולים דולגו` : ""}.`
+        : skipped ? `כל ${skipped} התנועות בקובץ כבר קיימות במערכת.` : "",
       ...errors,
     ].filter(Boolean).join(" ");
     if (added || credits) toast(`יובאו ${added + credits} תנועות`);
