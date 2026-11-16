@@ -99,12 +99,18 @@
         </div>
       </div>
       <div class="section" data-role="advisor">
-        <h2>הגדרת משכורת</h2>
+        <h2>נתונים לבדיקת המשכורת</h2>
         <form id="salaryForm" class="form">
-          <label class="field">יום בחודש<input type="number" name="day" min="1" max="28" inputmode="numeric"></label>
-          <label class="field">סכום (ריק = לפי ההמלצה)<input type="number" name="amount" min="0" step="250" inputmode="numeric"></label>
-          <label class="field">כמה להחזיר מהמינוס בחודש<input type="number" name="paydown" min="0" step="250" inputmode="numeric"></label>
-          <button class="btn primary" type="submit">שמירה</button>
+          <label class="field">משכורת יעד (₪)<input type="number" name="target" min="0" step="250" inputmode="numeric"></label>
+          <label class="field">יום המשכורת (סוף החלון)<input type="number" name="day" min="4" max="28" inputmode="numeric"></label>
+          <label class="field">הקטנת מינוס בחודש (₪)<input type="number" name="paydown" min="0" step="250" inputmode="numeric"></label>
+          <label class="field">מסגרת מינוס מאושרת (₪)<input type="number" name="limit" min="0" step="500" inputmode="numeric" placeholder="מהבנק"></label>
+          <label class="field">כרית ביטחון במסגרת (₪)<input type="number" name="cushion" min="0" step="500" inputmode="numeric"></label>
+          <label class="field">תקבולים ודאיים עד ה-15 (₪)<input type="number" name="receipts" min="0" step="100" inputmode="numeric" placeholder="מסליקה ויומן"></label>
+          <label class="field">הוצאות נוספות עד ה-15 (₪)<input type="number" name="extra" min="0" step="100" inputmode="numeric" placeholder="0 אם אין"></label>
+          <label class="field">מע"מ תשומות לקיזוז (₪)<input type="number" name="inputVat" min="0" step="10" inputmode="numeric" placeholder="מרו״ח"></label>
+          <label class="check"><input type="checkbox" name="approved"> המשכורת אושרה, להציג לדנה דרעי</label>
+          <button class="btn primary" type="submit">שמירה ובדיקה</button>
         </form>
         <p class="note" id="cashModelNote"></p>
       </div>
