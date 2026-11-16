@@ -112,7 +112,8 @@
   // ---------- helpers ----------
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
-  const fmt = (n) => (n < 0 ? "−" : "") + Math.round(Math.abs(n)).toLocaleString("he-IL") + "\u00A0₪";
+  // Wrapped in a left-to-right isolate so "−1,586 ₪" never flips to "1,586−" inside Hebrew text.
+  const fmt = (n) => "\u2066" + (n < 0 ? "−" : "") + Math.round(Math.abs(n)).toLocaleString("he-IL") + "\u00A0₪\u2069";
   const pct = (n) => (isFinite(n) ? (n * 100).toFixed(1) + "%" : "—");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const monthOf = (d) => d.slice(0, 7);
@@ -257,6 +258,7 @@
         : `עוד אין הכנסות ב${monthName(currentMonth)}.<span class="left-big">מוסיפים הכנסה או מייבאים מהבנק</span>`;
       $("#flowBar").innerHTML = ""; $("#flowLegend").innerHTML = "";
       $("#flowList").innerHTML = `<p class="empty">כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל.</p>`;
+      renderCommitments();
       $("#flowInsightsWrap").style.display = "none";
       return;
     }
@@ -275,18 +277,20 @@
     const total = Math.max(r.gross, r.out);
     $("#flowBar").innerHTML = `<div class="stack" role="img" aria-label="חלוקת ההכנסה">${order.map((g) =>
       `<div style="flex-basis:${(groups[g] / total) * 100}%;background:${GROUP_COLORS[g]}" title="${NAMES[g]}: ${fmt(groups[g])}"></div>`).join("")}</div>`;
-    $("#flowLegend").innerHTML = order.map((g) => `<span>${dot(g)}${NAMES[g]} ${per100(groups[g])}%</span>`).join("");
+    $("#flowLegend").innerHTML = order.map((g) => `<span>${dot(g)}${NAMES[g]} ${per100(groups[g]) ? per100(groups[g]) + "%" : ""}</span>`).join("");
 
-    let running = r.gross;
-    $("#flowList").innerHTML = `<table class="flow">
-      <tr><th></th><th class="num">סכום</th><th class="num hide-sm">מכל 100 ₪</th><th class="num">נשאר</th></tr>
-      <tr class="start"><td>${dot("vat").replace(GROUP_COLORS.vat, "var(--c-in)")}נכנס לעסק</td><td class="num">${fmt(r.gross)}</td><td class="num hide-sm muted-col">100</td><td class="num">${fmt(r.gross)}</td></tr>
-      ${r.steps.map((s) => { running -= s.amount; return `<tr>
-        <td>${dot(s.group)}<span>${esc(s.label)}${s.estimate ? ' <span class="tag">הערכה</span>' : ""}</span></td>
-        <td class="num">${fmt(-s.amount)}</td><td class="num hide-sm muted-col">${per100(s.amount)}</td>
-        <td class="num ${running < 0 ? "neg" : ""}">${fmt(running)}</td></tr>`; }).join("")}
-      <tr class="total"><td>${unexplained ? "עוד לא ידוע לאן" : "נשאר לך"}</td><td class="num ${unexplained ? "" : r.left >= 0 ? "pos" : "neg"}">${fmt(r.left)}</td><td class="num hide-sm">${per100(r.left)}</td><td></td></tr>
-    </table>`;
+    const share = (v) => Math.min(100, (v / Math.max(r.gross, r.out)) * 100);
+    const lrow = (cls, g, label, amt, tag = "") => `<div class="lrow ${cls}">
+        <span class="lname">${g ? dot(g) : ""}<span>${label}${tag}</span></span>
+        <span class="lamt">${fmt(amt)}</span>
+        ${g ? `<span class="lbar"><i style="width:${share(Math.abs(amt))}%;background:${GROUP_COLORS[g]}"></i></span>` : ""}
+      </div>`;
+    $("#flowList").innerHTML = `<div class="ledger">
+      ${lrow("start", null, "נכנס לעסק", r.gross)}
+      ${r.steps.map((s) => lrow("", s.group, esc(s.label), -s.amount, s.estimate ? ' <span class="tag">הערכה</span>' : "")).join("")}
+      ${lrow("end", null, unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "חסר", r.left)}
+    </div>`;
+    renderCommitments();
 
     const notMine = (groups.vat || 0) + (groups.tax || 0);
     const bizTop = r.steps.filter((s) => s.group === "biz")[0];
@@ -295,12 +299,28 @@
     if (bizTop) tips.push(`ההוצאה העסקית הגדולה ביותר היא <b>${esc(bizTop.label)}</b>: ${fmt(bizTop.amount)}, כלומר ${per100(bizTop.amount)} ₪ מכל 100 ₪.`);
     if (groups.private) tips.push(`הוצאות אישיות ומשיכות: <b>${fmt(groups.private)}</b>. קפה, אוכל וקניות קטנות בכרטיס העסקי מתערבבים עם העסק. משכורת קבועה לעצמך וכרטיס פרטי נפרד עושים סדר.`);
     const cm = commitments(); const nextM = Object.keys(cm.byMonth).sort()[0];
-    if (cm.total) tips.push(`בכרטיס כבר רשומים תשלומים עתידיים בסך <b>${fmt(cm.total)}</b>. ב${monthName(nextM)} ייצאו <b>${fmt(cm.byMonth[nextM])}</b> עוד לפני שנכנס שקל אחד.`);
+    if (cm.total) tips.push(`ב${monthName(nextM)} ייצאו <b>${fmt(cm.byMonth[nextM])}</b> על תשלומים ישנים, עוד לפני שנכנס שקל אחד. כדאי לא לפתוח עסקאות חדשות בתשלומים עד שהרשימה תתקצר.`);
     if (r.unknownCount) tips.push(`<b>${r.unknownCount}</b> תנועות עוד לא מסווגות. מסווגים אותן במסך הייבוא.`);
     if (r.skipped) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
     if (r.hasDemo) tips.push(`<span class="tag demo">דמו</span> חלק מההוצאות בחודש הזה הן נתוני דמה, עד שיגיעו הנתונים האמיתיים.`);
     $("#flowInsightsWrap").style.display = tips.length ? "" : "none";
     $("#flowInsights").innerHTML = `<ul class="tips">${tips.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+  }
+
+  function renderCommitments() {
+    const cm = commitments();
+    $("#commitWrap").style.display = cm.total ? "" : "none";
+    if (!cm.total) return;
+    const months = Object.keys(cm.byMonth).sort().slice(0, 8);
+    const max = Math.max(...months.map((m) => cm.byMonth[m]));
+    $("#commitments").innerHTML = `
+      <p class="commit-lead">תשלומים בכרטיס שעוד לא ירדו<span class="commit-total">${fmt(cm.total)}</span></p>
+      <div class="mbars" role="img" aria-label="תשלומים עתידיים לפי חודש">${months.map((m) => `
+        <div class="mbar"><span class="mv">${Math.round(cm.byMonth[m]).toLocaleString("he-IL")}</span>
+          <span class="mcol"><i style="height:${(cm.byMonth[m] / max) * 100}%"></i></span><span class="ml">${shortMonth(m)}</span></div>`).join("")}</div>
+      <div class="clist">${cm.items.sort((a, b) => b.amount * (b.inst.t - b.inst.n) - a.amount * (a.inst.t - a.inst.n)).map((e) => `
+        <div class="citem"><span><b>${esc(e.name)}</b><small>${fmt(e.amount)} לחודש · נשארו ${e.inst.t - e.inst.n} מתוך ${e.inst.t}</small></span>
+        <span class="lamt">${fmt(e.amount * (e.inst.t - e.inst.n))}</span></div>`).join("")}</div>`;
   }
 
   function stat(label, value, sub) {
@@ -329,8 +349,8 @@
     $("#kpis").innerHTML = [
       stat("מחזור", fmt(c.gross), state.settings.licensed ? `${fmt(c.netIncome)} בלי מע"מ` : "&nbsp;"),
       stat("הוצאות העסק", fmt(c.expenses), `קבועות ${fmt(c.fixedNet)}`),
-      stat("רווח לפני מס", `<span class="${c.profit >= 0 ? "pos" : "neg"}">${fmt(c.profit)}</span>`, `רווחיות ${pct(c.margin)}`),
-      stat("נקודת איזון", fmt(c.breakEvenGross), "מחזור שמכסה את הקבועות"),
+      stat("רווח לפני מס", `<span class="${c.profit >= 0 ? "pos" : "neg"}">${fmt(c.profit)}</span>`, moneyFlow(currentMonth).hasAccount ? `רווחיות ${pct(c.margin)}` : "לפי הכרטיס בלבד, בלי שכירות ועו\"ש"),
+      stat("נקודת איזון", c.fixedNet ? fmt(c.breakEvenGross) : "—", c.fixedNet ? "מחזור שמכסה את הקבועות" : "עוד לא הוגדרו הוצאות קבועות"),
     ].join("");
 
     renderTrend();

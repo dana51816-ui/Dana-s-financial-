@@ -8,7 +8,7 @@
   <link rel="icon" href="assets/lotus.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@200;300;400;500;600;700&family=Jost:wght@200;300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="vendor/xlsx.full.min.js" defer></script>
 </head>
@@ -53,13 +53,20 @@
     <!-- MONEY FLOW -->
     <section id="tab-flow" class="panel active">
       <div class="flow-hero">
+        <img class="hero-mark" src="assets/lotus.png" alt="">
         <p class="headline" id="flowHeadline"></p>
         <div id="flowBar"></div>
         <div class="flow-legend" id="flowLegend"></div>
       </div>
-      <div class="section">
-        <h2>מה נכנס ומה יצא</h2>
-        <div class="table-wrap" id="flowList"></div>
+      <div class="flow-grid">
+        <div class="section ledger-wrap">
+          <h2>מה נכנס ומה יצא</h2>
+          <div id="flowList"></div>
+        </div>
+        <div class="section" id="commitWrap">
+          <h2>כבר התחייבת</h2>
+          <div id="commitments"></div>
+        </div>
       </div>
       <div class="section" id="flowInsightsWrap">
         <h2>כדאי לשים לב</h2>
