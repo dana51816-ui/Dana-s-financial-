@@ -554,21 +554,19 @@
       <div class="ins ins-${i.tone}"><span class="ins-dot" aria-hidden="true"></span><div><b class="ins-t">${esc(i.title)}</b><p>${i.text}</p></div></div>`).join("")}</div>`;
   }
 
-  let attOpen = false;
   function renderAttention() {
     const all = attentionItems();
-    const items = attOpen ? all : all.slice(0, 3);
+    const items = all;
     const el = $("#attention");
     el.style.display = items.length ? "" : "none";
     if (!items.length) return;
-    el.innerHTML = `<div class="att-head"><h2>לטיפול</h2><span class="att-count">${all.length}</span></div>
-      <div class="att-list">${items.map((i) => `<div class="att">
+    el.innerHTML = `<div class="att-list">${items.map((i) => `<div class="att">
         <div class="att-body"><b>${i.title}</b><span>${i.text}</span></div>
         ${i.credit ? `<div class="att-actions"><button class="btn small" data-credit="${i.credit}" data-tag="income">הכנסה</button><button class="btn small ghost" data-credit="${i.credit}" data-tag="internal">העברה שלי</button></div>`
           : i.action ? `<button class="btn small" data-act="${i.action}">${i.label}</button>` : ""}
       </div>`).join("")}</div>
-      ${all.length > 3 ? `<button class="att-more" id="attMore">${attOpen ? "הצגת פחות" : `הצגת כל ${all.length}`}</button>` : ""}`;
-    const more = $("#attMore"); if (more) more.onclick = () => { attOpen = !attOpen; renderAttention(); };
+`;
+    if (!all.length && $("#todoDlg").open) $("#todoDlg").close();
   }
 
   // Count the hero number up from its previous value (state change, not decoration).
@@ -606,57 +604,98 @@
     $("#monthNext").disabled = i >= months.length - 1;
   }
 
+  // Category icons for lists and the home ring legend.
+  const CAT_ICON = {
+    "שכירות": "home", "חומרים לטיפולים": "drop", "מוצרים למכירה": "bag", "הנהלת חשבונות": "doc", "ביטוח ורישוי": "shield",
+    "ביטוח אישי": "shield", "שיווק": "spark", "תוכנה ותקשורת": "phone", "נסיעות ורכב": "car", "השתלמויות": "spark",
+    "עמלות בנק ואשראי": "coin", "אחר": "q", "ציוד": "tool", "הלוואות": "coin", "תשלום מע\"מ": "pct",
+    "מקדמות מס וביטוח לאומי": "pct", "משיכה פרטית": "user", "קניות אישיות": "bag", "פנסיה וגמל": "user", "לא מסווג": "q",
+    "חיוב כרטיס אשראי": "coin", "כרטיס אשראי בלי פירוט": "q",
+  };
+  const catIcon = (cat) => `<span class="cico cico-${groupOf(cat)}"><svg class="i"><use href="#c-${CAT_ICON[cat] || "q"}"/></svg></span>`;
+  // Ring palette, tuned for the paper card.
+  const RING = { vat: "#4E3A4F", tax: "#9A7C9B", biz: "#B28C7F", loan: "#D9BC9E", private: "#7E95A3", unknown: "#DCD2CD", left: "#6F9A7C" };
+  const RING_NAMES = { vat: "מע\"מ", tax: "ביטוח לאומי ומסים", biz: "הוצאות העסק", loan: "הלוואה", private: "המשכורת שלך ואישי", unknown: "לבירור" };
+
+  function ringSVG(parts, total) {
+    const R = 104, C = 2 * Math.PI * R, gap = parts.length > 1 ? 5 : 0;
+    let off = 0;
+    const arcs = parts.map((p) => {
+      const len = Math.max(2, (p.v / total) * C - gap);
+      const a = `<circle class="arc" cx="130" cy="130" r="${R}" fill="none" stroke="${p.color}" stroke-width="20" stroke-linecap="round"
+        stroke-dasharray="${len} ${C}" stroke-dashoffset="${-off}" style="--len:${len}"><title>${p.name}: ${plain(fmt(p.v))}</title></circle>`;
+      off += (p.v / total) * C;
+      return a;
+    }).join("");
+    return `<svg viewBox="0 0 260 260" class="ring" role="img" aria-label="לאן הלכה ההכנסה"><g transform="rotate(-90 130 130)">
+      <circle cx="130" cy="130" r="${R}" fill="none" stroke="var(--mauve-mist)" stroke-width="20"/>${arcs}</g></svg>`;
+  }
+
   function renderFlow() {
-    const r = moneyFlow(currentMonth);
-    const per100 = (v) => (r.gross ? Math.round((v / r.gross) * 100) : 0);
-    const c = calc(currentMonth), g = state.goals[currentMonth];
+    const m = currentMonth, r = moneyFlow(m), c = calc(m), g = state.goals[m];
     const unexplained = !r.hasAccount && r.left > 0;
-    const partial = currentMonth === monthOf(todayISO());
-    const goalHtml = g && g.goal ? (() => {
-      const ratio = c.gross / g.goal, gap = Math.max(0, g.goal - c.gross), daily = g.remaining > 0 && gap ? gap / g.remaining : null;
-      return `<div class="hero-goal"><div class="hbar" role="progressbar" aria-valuenow="${Math.round(ratio * 100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.min(100, ratio * 100)}%"></i></div>
-        <div class="hero-goal-t">${Math.round(ratio * 100)}% מהיעד של ${fmt(g.goal)}${gap ? ` · חסרים ${fmt(gap)}` : " · היעד הושג"}${daily ? ` · ${fmt(daily)} ליום עבודה` : ""}</div></div>`;
-    })() : `<div class="hero-goal-t">עוד לא נקבע יעד לחודש הזה</div>`;
-    $("#monthHero").innerHTML = `
-      <div class="hero-k">הכנסות ב${monthName(currentMonth)}</div>
-      <div class="hero-num">${fmt(r.gross)}</div>
-      ${goalHtml}
-      ${r.gross ? `<div class="hero-figs">
-        <div><span>יצא</span><b>${fmt(r.out)}</b></div>
-        <div><span>${unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "יצא יותר ממה שנכנס"}</span><b>${fmt(r.left)}</b></div>
-      </div>` : ""}
-      ${unexplained ? `<p class="hero-note">כדי לדעת לאן הלך כל השאר, צריך את דף העו"ש של החודש.</p>` : partial && r.gross ? `<p class="hero-note">החודש עוד לא נגמר: חלק מההכנסות עוד לא נכנסו, וחלק מההוצאות כבר ירדו.</p>` : ""}`;
+    const partial = m === monthOf(todayISO());
+    const per100 = (v) => (r.gross ? Math.round((v / r.gross) * 100) : 0);
+
+    // greeting
+    const h = new Date().getHours();
+    $("#hello").textContent = h < 12 ? "בוקר טוב" : h < 17 ? "צהריים טובים" : h < 21 ? "ערב טוב" : "לילה טוב";
+    $("#greetTitle").innerHTML = r.gross ? `ככה נראה ${HEB_MONTHS[+m.slice(5) - 1]} שלך` : `${monthName(m)}`;
+
+    // ring
+    const groups = {};
+    r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
+    const order = ["vat", "tax", "biz", "loan", "private", "unknown"].filter((k) => groups[k] > 0);
+    const parts = order.map((k) => ({ k, v: groups[k], color: RING[k], name: RING_NAMES[k] }));
+    if (r.left > 0) parts.push({ k: "left", v: r.left, color: unexplained ? "#E8DEDA" : RING.left, name: unexplained ? "עוד לא ידוע" : "נשאר לך" });
+    const total = Math.max(r.gross, r.out) || 1;
+    const centerLabel = !r.gross ? "עוד אין הכנסות" : unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : partial ? "יצא יותר, עד עכשיו" : "יצא יותר ממה שנכנס";
+    $("#ring").innerHTML = `${ringSVG(parts.length ? parts : [{ k: "x", v: 1, color: "var(--mauve-mist)", name: "" }], total)}
+      <div class="ring-center"><span class="rc-label">${centerLabel}</span><span class="rc-num hero-num">${fmt(r.left)}</span>
+      <span class="rc-sub">${r.gross ? `מתוך ${fmt(r.gross)} שנכנסו` : "מוסיפים הכנסה עם הפלוס"}</span></div>`;
+    $("#ringLegend").innerHTML = parts.filter((p) => p.k !== "x").map((p) => `
+      <div class="rl"><i style="background:${p.color}"></i><span class="rl-n">${p.name}</span><span class="rl-v">${fmt(p.v)}</span><span class="rl-p">${per100(p.v)}%</span></div>`).join("")
+      + (partial && r.gross ? `<p class="rl-note">החודש עוד לא נגמר</p>` : unexplained ? `<p class="rl-note">חסר דף עו"ש לחודש הזה</p>` : "");
+    animateHero(r.left);
+
+    // tiles: in / out / goal
+    const ratio = g && g.goal ? c.gross / g.goal : null;
+    $("#tiles").innerHTML = `
+      <button class="tile" data-act="tab-income"><span class="t-k">נכנס</span><span class="t-v">${fmt(r.gross)}</span>
+        ${ratio != null ? `<span class="t-bar"><i style="width:${Math.min(100, ratio * 100)}%"></i></span><span class="t-s">${Math.round(ratio * 100)}% מהיעד</span>` : `<span class="t-s">אין יעד לחודש</span>`}</button>
+      <button class="tile" data-act="tab-expenses"><span class="t-k">יצא</span><span class="t-v">${fmt(r.out)}</span><span class="t-s">${per100(r.out)} ₪ מכל 100 ₪</span></button>
+      <button class="tile" data-act="tab-cash"><span class="t-k">${g && g.goal && g.goal > c.gross ? "חסר ליעד" : "יעד"}</span><span class="t-v">${g && g.goal ? fmt(Math.max(0, g.goal - c.gross)) : "—"}</span>
+        <span class="t-s">${g && g.goal ? (g.goal > c.gross ? (g.remaining ? `${fmt((g.goal - c.gross) / g.remaining)} ליום עבודה` : `מתוך ${fmt(g.goal)}`) : "היעד הושג") : "קובעים בהגדרות"}</span></button>`;
+
+    // one insight + todo pill
+    const ins = smartInsights(m);
+    const top = ins.find((i) => i.title !== "תנועות שלא סווגו" && i.title !== "נתוני דמו") || ins[0];
+    $("#oneInsight").innerHTML = top ? `<div class="oi oi-${top.tone}"><span class="oi-mark"><img src="assets/lotus.png" alt=""></span>
+      <div><b>${esc(top.title)}</b><p>${top.text}</p>${ins.length > 1 ? `<button class="link" data-act="more">עוד ${ins.length - 1} תובנות</button>` : ""}</div></div>` : "";
+    const todo = attentionItems();
+    $("#todoPill").style.display = todo.length ? "" : "none";
+    $("#todoPill").innerHTML = `<span class="tp-dot">${todo.length}</span><span>${todo.length === 1 ? "דבר אחד מחכה לטיפול" : `${todo.length} דברים מחכים לטיפול`}</span><svg class="i"><use href="#i-next"/></svg>`;
     renderAttention();
-    animateHero(r.gross);
+
+    // details (folded)
     if (!r.gross) {
-      $("#flowBar").innerHTML = ""; $("#flowLegend").innerHTML = "";
       $("#flowList").innerHTML = `<p class="empty">${r.cardTotal ? `בחודש הזה יצאו ${fmt(r.cardTotal)} בכרטיסי האשראי, אבל אין דיווח הכנסות.` : "כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל."}</p>`;
       $("#flowInsightsWrap").style.display = "none";
       return;
     }
-
-    const groups = {};
-    r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
-    if (r.left > 0) groups.left = r.left;
-    const NAMES = { vat: "מע\"מ", tax: "מס וביטוח לאומי", biz: "הוצאות העסק", loan: "הלוואות", private: "אישי ומשיכות", unknown: "לא מסווג", left: unexplained ? "עוד לא ידוע" : "נשאר לך" };
-    const order = ["vat", "tax", "biz", "loan", "private", "unknown", "left"].filter((g) => groups[g] > 0);
-    const total = Math.max(r.gross, r.out);
-    $("#flowBar").innerHTML = `<div class="stack" role="img" aria-label="חלוקת ההכנסה">${order.map((g) =>
-      `<div style="flex-basis:${(groups[g] / total) * 100}%;background:${GROUP_COLORS[g]}" title="${NAMES[g]}: ${fmt(groups[g])}"></div>`).join("")}</div>`;
-    $("#flowLegend").innerHTML = order.map((g) => `<span>${dot(g)}${NAMES[g]} ${per100(groups[g]) ? per100(groups[g]) + "%" : ""}</span>`).join("");
-
-    const share = (v) => Math.min(100, (v / Math.max(r.gross, r.out)) * 100);
-    const lrow = (cls, g, label, amt, tag = "") => `<div class="lrow ${cls}">
-        <span class="lname">${g ? dot(g) : ""}<span>${label}${tag}</span></span>
+    const share = (v) => Math.min(100, (v / total) * 100);
+    const lrow = (cls, gk, label, amt, tag = "", cat) => `<div class="lrow ${cls}">
+        <span class="lname">${cat ? catIcon(cat) : ""}<span>${label}${tag}</span></span>
         <span class="lamt">${fmt(amt)}</span>
-        ${g ? `<span class="lbar"><i style="width:${share(Math.abs(amt))}%;background:${GROUP_COLORS[g]}"></i></span>` : ""}
+        ${gk ? `<span class="lbar"><i style="width:${share(Math.abs(amt))}%;background:${RING[gk] || "#ccc"}"></i></span>` : ""}
       </div>`;
+    const catForStep = (s) => (s.group === "biz" ? s.label : s.group === "vat" ? "תשלום מע\"מ" : s.group === "tax" ? "מקדמות מס וביטוח לאומי" : s.group === "loan" ? "הלוואות" : s.group === "private" ? "משיכה פרטית" : "לא מסווג");
     $("#flowList").innerHTML = `<div class="ledger">
       ${lrow("start", null, "נכנס לעסק", r.gross)}
-      ${r.steps.map((s) => lrow("", s.group, esc(s.label), -s.amount, s.estimate ? ' <span class="tag">הערכה</span>' : "")).join("")}
+      ${r.steps.map((s) => lrow("", s.group, esc(s.label), -s.amount, s.estimate ? ' <span class="tag">הערכה</span>' : "", catForStep(s))).join("")}
       ${lrow("end", null, unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "חסר", r.left)}
     </div>`;
-    renderInsights(currentMonth);
+    renderInsights(m);
   }
 
   function renderCommitments() {
@@ -871,7 +910,7 @@
     if (!rows.length) { $("#incomeList").innerHTML = `<p class="empty">אין הכנסות ב${monthName(currentMonth)}. מוסיפים עם הכפתור, או מדביקים הודעות מוואטסאפ למטה.</p>`; return; }
     const total = rows.reduce((s, r) => s + r.amount, 0);
     $("#incomeList").innerHTML = `<div class="list">${rows.map((r) => `
-      <div class="item">
+      <div class="item has-ico"><span class="cico cico-in"><svg class="i"><use href="#c-in"/></svg></span>
         <span class="t">${esc(r.note) || (r.kind === "month" ? "סיכום חודשי" : "יום עבודה")}</span>
         <span class="meta">${fmtDate(r.date)}${r.city ? ` · ${esc(r.city)}` : ""}${r.kind === "month" ? ' <span class="tag">סיכום</span>' : ""}</span>
         <span class="amt">${fmt(r.amount)}</span>${delBtn("income", r.id)}
@@ -884,9 +923,9 @@
   }
 
   function expenseItem(e, kind) {
-    const tags = (e.demo ? ' <span class="tag demo">דמו</span>' : "") + (e.source === "bank" ? ' <span class="tag">יובא</span>' : "");
+    const tags = e.demo ? ' <span class="tag demo">דמו</span>' : "";
     const when = kind === "fixed" ? `מ${shortMonth(e.start || currentMonth)}` : fmtDate(e.date);
-    return `<div class="item ${e.category === "לא מסווג" ? "todo" : ""}">
+    return `<div class="item has-ico ${e.category === "לא מסווג" ? "todo" : ""}">${catIcon(e.category)}
       <span class="t">${esc(e.name)}${tags}</span>
       <span class="meta">${when} · ${kind === "fixed" ? esc(e.category) : catSelect(e.id, e.category)}</span>
       <span class="amt">${fmt(e.amount)}</span>${delBtn(kind, e.id)}
@@ -1191,12 +1230,18 @@
     // attention list actions, credit decisions, expense filter
     document.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]");
-      if (act) { const a = act.dataset.act; if (a === "quick-income") openQuick("income"); else if (a.startsWith("tab-")) showTab(a.slice(4)); return; }
+      if (act) { const a = act.dataset.act; if ($("#todoDlg").open) $("#todoDlg").close();
+        if (a === "more") { $("#monthMore").open = true; setTimeout(() => $("#monthMore").scrollIntoView({ behavior: "smooth", block: "start" }), 50); return; }
+        if (a === "quick-income") openQuick("income"); else if (a.startsWith("tab-")) showTab(a.slice(4)); return; }
       const cr = e.target.closest("[data-credit]");
       if (cr) { const c = state.bankCredits.find((x) => x.id === cr.dataset.credit); if (c) { c.tag = cr.dataset.tag; toast(c.tag === "income" ? "נספר כהכנסה" : "סומן כהעברה שלך, לא נספר כהכנסה"); commit(); } return; }
       const fc = e.target.closest("[data-filter]");
       if (fc) { expFilter = fc.dataset.filter; renderExpenses(); }
     });
+
+    $("#todoPill").addEventListener("click", () => $("#todoDlg").showModal());
+    $("#todoClose").addEventListener("click", () => $("#todoDlg").close());
+    $("#todoDlg").addEventListener("click", (e) => { if (e.target.id === "todoDlg") $("#todoDlg").close(); });
 
     // monthly summary to share
     $("#shareBtn").addEventListener("click", () => { $("#shareText").value = monthSummaryText(currentMonth); $("#shareDlg").showModal(); });
