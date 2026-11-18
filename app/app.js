@@ -572,7 +572,7 @@
   // Count the hero number up from its previous value (state change, not decoration).
   let heroPrev = null;
   function animateHero(to) {
-    const el = $(".hero-num"); if (!el) return;
+    const el = $("#greetTitle .hero-num") || $(".hero-num"); if (!el) return;
     const from = heroPrev == null ? to : heroPrev; heroPrev = to;
     if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.innerHTML = fmt(to); return; }
     const t0 = performance.now(), dur = 650;
@@ -631,6 +631,45 @@
       <circle cx="130" cy="130" r="${R}" fill="none" stroke="var(--mauve-mist)" stroke-width="20"/>${arcs}</g></svg>`;
   }
 
+  let lastJars = null;
+  const JAR_TONES = {
+    plum: { glass: "#4E3A4F", liquid: "#7B5E7D", liquid2: "#9A7E9C", lid: "#3D2D3E" },
+    mauve: { glass: "#8A6557", liquid: "#C49E90", liquid2: "#D9BBAF", lid: "#6F4F43" },
+    gold: { glass: "#A07B3F", liquid: "#DDBB7E", liquid2: "#EBD3A3", lid: "#86652F" },
+  };
+  function jarSVG(level, tone, k) {
+    const t = JAR_TONES[tone], top = 140 - Math.max(0.04, level) * 100, id = `jc${k}`;
+    const wave = (y) => `M0 ${y} q15 -5 30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 t30 0 V160 H0 Z`;
+    return `<svg class="jar-svg" viewBox="0 0 120 150" aria-hidden="true">
+      <defs><clipPath id="${id}"><path d="M28 44 Q24 40 24 34 L24 33 Q24 30 27 30 L93 30 Q96 30 96 33 L96 34 Q96 40 92 44 L92 44 Q104 52 104 70 L104 126 Q104 142 88 142 L32 142 Q16 142 16 126 L16 70 Q16 52 28 44 Z"/></clipPath></defs>
+      <g clip-path="url(#${id})">
+        <rect x="0" y="0" width="120" height="150" fill="${t.liquid2}" opacity=".18"/>
+        <g class="liquid" style="--top:${top}px">
+          <path class="wave w2" d="${wave(top + 2)}" fill="${t.liquid2}"/>
+          <path class="wave w1" d="${wave(top)}" fill="${t.liquid}"/>
+        </g>
+        <circle class="bub b1" cx="44" cy="128" r="2.2" fill="#fff" opacity=".55"/><circle class="bub b2" cx="74" cy="132" r="1.6" fill="#fff" opacity=".5"/><circle class="bub b3" cx="60" cy="136" r="1.2" fill="#fff" opacity=".45"/>
+      </g>
+      <path d="M28 44 Q24 40 24 34 L24 33 Q24 30 27 30 L93 30 Q96 30 96 33 L96 34 Q96 40 92 44 Q104 52 104 70 L104 126 Q104 142 88 142 L32 142 Q16 142 16 126 L16 70 Q16 52 28 44 Z" fill="none" stroke="${t.glass}" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M26 64 Q24 76 25 104" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".55"/>
+      <rect x="30" y="14" width="60" height="16" rx="5" fill="${t.lid}"/>
+      <rect x="30" y="14" width="60" height="5" rx="2.5" fill="#fff" opacity=".18"/>
+    </svg>`;
+  }
+  function openJar(id) {
+    if (!lastJars) return;
+    const jr = lastJars.jars.find((x) => x.id === id); if (!jr) return;
+    const pctOf = (v) => (lastJars.gross ? Math.round((v / lastJars.gross) * 100) : 0);
+    const catFor = (s) => (s.group === "biz" ? s.label : s.group === "vat" ? "תשלום מע\"מ" : s.group === "tax" ? "מקדמות מס וביטוח לאומי" : s.group === "loan" ? "הלוואות" : s.group === "private" ? (/פנסיה/.test(s.label) ? "פנסיה וגמל" : "משיכה פרטית") : "לא מסווג");
+    const EXPLAIN = { state: "הכסף הזה עבר דרך החשבון שלך, אבל הוא של רשות המסים וביטוח לאומי. כדאי להפריש כ-15% מכל הכנסה לחשבון נפרד.",
+      biz: "מה שהעסק צריך כדי לעבוד: חומרים, שכירות, נסיעות, רואה חשבון וההלוואה.", you: "הכסף שהגיע אלייך: מה שהעברת לעצמך, הפנסיה, ומה שנשאר בחשבון." };
+    $("#jarTitle").textContent = `${jr.name} · ${plain(fmt(jr.total))}`;
+    const rows = [...jr.steps.map((s) => ({ cat: catFor(s), label: s.label, amount: s.amount, est: s.estimate })), ...(jr.extra ? [{ cat: "משיכה פרטית", label: jr.extra.label, amount: jr.extra.amount }] : [])];
+    $("#jarBody").innerHTML = `<p class="jar-explain">${EXPLAIN[id]}</p><div class="list">${rows.sort((a, b) => b.amount - a.amount).map((x) => `
+      <div class="item has-ico">${catIcon(x.cat)}<span class="t">${esc(x.label)}${x.est ? ' <span class="tag">הערכה</span>' : ""}</span><span class="meta">${pctOf(x.amount)}% מההכנסה</span><span class="amt">${fmt(x.amount)}</span><span></span></div>`).join("")}</div>`;
+    $("#jarDlg").showModal();
+  }
+
   function renderFlow() {
     const m = currentMonth, r = moneyFlow(m), c = calc(m), g = state.goals[m];
     const unexplained = !r.hasAccount && r.left > 0;
@@ -642,30 +681,41 @@
     $("#hello").textContent = h < 12 ? "בוקר טוב" : h < 17 ? "צהריים טובים" : h < 21 ? "ערב טוב" : "לילה טוב";
     $("#greetTitle").innerHTML = r.gross ? `ככה נראה ${HEB_MONTHS[+m.slice(5) - 1]} שלך` : `${monthName(m)}`;
 
-    // ring
+    // three jars: the state's, the business's, yours
     const groups = {};
     r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
-    const order = ["vat", "tax", "biz", "loan", "private", "unknown"].filter((k) => groups[k] > 0);
-    const parts = order.map((k) => ({ k, v: groups[k], color: RING[k], name: RING_NAMES[k] }));
-    if (r.left > 0) parts.push({ k: "left", v: r.left, color: unexplained ? "#E8DEDA" : RING.left, name: unexplained ? "עוד לא ידוע" : "נשאר לך" });
-    const total = Math.max(r.gross, r.out) || 1;
-    const centerLabel = !r.gross ? "עוד אין הכנסות" : unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : partial ? "יצא יותר, עד עכשיו" : "יצא יותר ממה שנכנס";
-    $("#ring").innerHTML = `${ringSVG(parts.length ? parts : [{ k: "x", v: 1, color: "var(--mauve-mist)", name: "" }], total)}
-      <div class="ring-center"><span class="rc-label">${centerLabel}</span><span class="rc-num hero-num">${fmt(r.left)}</span>
-      <span class="rc-sub">${r.gross ? `מתוך ${fmt(r.gross)} שנכנסו` : "מוסיפים הכנסה עם הפלוס"}</span></div>`;
-    $("#ringLegend").innerHTML = parts.filter((p) => p.k !== "x").map((p) => `
-      <div class="rl"><i style="background:${p.color}"></i><span class="rl-n">${p.name}</span><span class="rl-v">${fmt(p.v)}</span><span class="rl-p">${per100(p.v)}%</span></div>`).join("")
-      + (partial && r.gross ? `<p class="rl-note">החודש עוד לא נגמר</p>` : unexplained ? `<p class="rl-note">חסר דף עו"ש לחודש הזה</p>` : "");
-    animateHero(r.left);
+    const stepsOf = (gs) => r.steps.filter((s) => gs.includes(s.group));
+    const jars = [
+      { id: "state", name: "של המדינה", sub: "מע\"מ וביטוח לאומי", steps: stepsOf(["vat", "tax"]), tone: "plum" },
+      { id: "biz", name: "של העסק", sub: "הוצאות, הלוואה", steps: stepsOf(["biz", "loan", "unknown"]), tone: "mauve" },
+      { id: "you", name: "שלך", sub: r.left > 0 && !unexplained ? "משכורת ומה שנשאר" : "משכורת ופנסיה", steps: stepsOf(["private"]), tone: "gold",
+        extra: r.left > 0 && !unexplained ? { label: "נשאר בחשבון", amount: r.left } : null },
+    ];
+    jars.forEach((jr) => { jr.total = jr.steps.reduce((a, s) => a + s.amount, 0) + (jr.extra ? jr.extra.amount : 0); });
+    lastJars = { m, jars, gross: r.gross };
+    $("#jars").innerHTML = r.gross ? jars.map((jr, k) => `
+      <button class="jar jar-${jr.tone}" data-jar="${jr.id}" style="--d:${k * 90}ms">
+        ${jarSVG(Math.min(1, jr.total / r.gross), jr.tone, k)}
+        <span class="jar-v">${fmt(jr.total)}</span>
+        <span class="jar-n">${jr.name}</span>
+        <span class="jar-s">${per100(jr.total)}% · ${jr.sub}</span>
+      </button>`).join("") : `<div class="jars-empty"><img src="assets/lotus.png" alt=""><p>עוד אין הכנסות ב${monthName(m)}.<br>מוסיפים את ההכנסה הראשונה עם הפלוס.</p></div>`;
+    $("#greetTitle").innerHTML = r.gross ? `ככה התחלקו <span class="hero-num">${fmt(r.gross)}</span><br>של ${HEB_MONTHS[+m.slice(5) - 1]}` : monthName(m);
+    const flags = [];
+    if (unexplained) flags.push(`<span class="flag">${fmt(r.left)} עוד לא ידוע לאן. חסר דף עו"ש</span>`);
+    if (r.left < 0) flags.push(`<span class="flag warn">יצא ${fmt(-r.left)} יותר ממה שנכנס${partial ? ", עד עכשיו" : ""}</span>`);
+    if (flags.length) $("#jars").insertAdjacentHTML("beforeend", `<div class="flags">${flags.join("")}</div>`);
+    animateHero(r.gross);
 
-    // tiles: in / out / goal
-    const ratio = g && g.goal ? c.gross / g.goal : null;
-    $("#tiles").innerHTML = `
-      <button class="tile" data-act="tab-income"><span class="t-k">נכנס</span><span class="t-v">${fmt(r.gross)}</span>
-        ${ratio != null ? `<span class="t-bar"><i style="width:${Math.min(100, ratio * 100)}%"></i></span><span class="t-s">${Math.round(ratio * 100)}% מהיעד</span>` : `<span class="t-s">אין יעד לחודש</span>`}</button>
-      <button class="tile" data-act="tab-expenses"><span class="t-k">יצא</span><span class="t-v">${fmt(r.out)}</span><span class="t-s">${per100(r.out)} ₪ מכל 100 ₪</span></button>
-      <button class="tile" data-act="tab-cash"><span class="t-k">${g && g.goal && g.goal > c.gross ? "חסר ליעד" : "יעד"}</span><span class="t-v">${g && g.goal ? fmt(Math.max(0, g.goal - c.gross)) : "—"}</span>
-        <span class="t-s">${g && g.goal ? (g.goal > c.gross ? (g.remaining ? `${fmt((g.goal - c.gross) / g.remaining)} ליום עבודה` : `מתוך ${fmt(g.goal)}`) : "היעד הושג") : "קובעים בהגדרות"}</span></button>`;
+    // goal ribbon
+    if (g && g.goal) {
+      const ratio = c.gross / g.goal, gap = Math.max(0, g.goal - c.gross);
+      const msg = ratio >= 1 ? "עשית את זה. היעד הושג" : partial ? `חסרים ${fmt(gap)}${g.remaining ? ` · ${fmt(gap / g.remaining)} ליום עבודה` : ""}` : ratio >= 0.85 ? `כמעט שם. חסרו ${fmt(gap)}` : `חסרו ${fmt(gap)}`;
+      $("#goalRibbon").innerHTML = `<div class="gr-top"><span>היעד של ${HEB_MONTHS[+m.slice(5) - 1]}</span><b>${Math.round(ratio * 100)}%</b></div>
+        <div class="gr-bar"><i style="width:${Math.min(100, ratio * 100)}%"></i><span class="gr-flag" aria-hidden="true"></span></div>
+        <div class="gr-bottom"><span>${msg}</span><span class="gr-of">${fmt(c.gross)} מתוך ${fmt(g.goal)}</span></div>`;
+      $("#goalRibbon").style.display = "";
+    } else $("#goalRibbon").style.display = "none";
 
     // one insight + todo pill
     const ins = smartInsights(m);
@@ -683,6 +733,7 @@
       $("#flowInsightsWrap").style.display = "none";
       return;
     }
+    const total = Math.max(r.gross, r.out) || 1;
     const share = (v) => Math.min(100, (v / total) * 100);
     const lrow = (cls, gk, label, amt, tag = "", cat) => `<div class="lrow ${cls}">
         <span class="lname">${cat ? catIcon(cat) : ""}<span>${label}${tag}</span></span>
@@ -1240,6 +1291,9 @@
     });
 
     $("#todoPill").addEventListener("click", () => $("#todoDlg").showModal());
+    document.addEventListener("click", (e) => { const j = e.target.closest("[data-jar]"); if (j) openJar(j.dataset.jar); });
+    $("#jarClose").addEventListener("click", () => $("#jarDlg").close());
+    $("#jarDlg").addEventListener("click", (e) => { if (e.target.id === "jarDlg") $("#jarDlg").close(); });
     $("#todoClose").addEventListener("click", () => $("#todoDlg").close());
     $("#todoDlg").addEventListener("click", (e) => { if (e.target.id === "todoDlg") $("#todoDlg").close(); });
 

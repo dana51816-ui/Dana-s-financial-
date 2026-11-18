@@ -8,7 +8,7 @@
   <link rel="icon" href="assets/lotus.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@200;300;400;500;600;700&family=Jost:wght@200;300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@200;300;400;500;600;700&family=Fredoka:wght@400;500;600&family=Jost:wght@200;300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer onerror="var s=document.createElement('script');s.src='vendor/xlsx.full.min.js';document.head.appendChild(s)"></script>
 </head>
@@ -73,12 +73,8 @@
         <h1 class="greet-title" id="greetTitle"></h1>
       </header>
 
-      <div class="ring-card">
-        <div class="ring-wrap" id="ring"></div>
-        <div class="ring-legend" id="ringLegend"></div>
-      </div>
-
-      <div class="tiles" id="tiles"></div>
+      <div class="jars" id="jars"></div>
+      <div class="goal-card" id="goalRibbon"></div>
 
       <button class="todo-pill" id="todoPill" type="button"></button>
 
@@ -302,6 +298,16 @@
       </div>
       <button class="btn primary block" type="submit">שמירה</button>
     </form>
+  </dialog>
+
+  <dialog id="jarDlg" aria-labelledby="jarTitle">
+    <div class="share-wrap">
+      <div class="sheet-head">
+        <h2 id="jarTitle"></h2>
+        <button type="button" class="icon-btn" id="jarClose" aria-label="סגירה"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+      <div id="jarBody"></div>
+    </div>
   </dialog>
 
   <dialog id="todoDlg" aria-label="לטיפול">
