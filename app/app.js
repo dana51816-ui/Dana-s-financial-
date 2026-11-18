@@ -257,6 +257,8 @@
   const atDay = (m, d) => `${m}-${pad2(Math.min(d, daysIn(m)))}`;
   // Credits that move the owner's own money around are not sales.
   const isTransferIn = (desc) => (/העברה/.test(desc) && !/bit/i.test(desc)) || /פייבוקס שלי/.test(desc);
+  // A credit counts as internal money (not sales) if the advisor marked it so, or by default when it looks like a transfer.
+  const isInternal = (c) => (c.tag ? c.tag === "internal" : isTransferIn(c.desc));
 
   // Months fully covered by the checking-account data (used as the history window).
   function bankMonths() {
@@ -312,7 +314,7 @@
   function incomeModel() {
     const last = monthOf(lastBankDate() || todayISO());
     const full = bankMonths().filter((m) => m < last);
-    const credits = state.bankCredits.filter((c) => full.includes(monthOf(c.date)) && !isTransferIn(c.desc));
+    const credits = state.bankCredits.filter((c) => full.includes(monthOf(c.date)) && !isInternal(c));
     const total = credits.reduce((s, c) => s + c.amount, 0);
     const avg = full.length ? total / full.length : state.income.reduce((s, i) => s + i.amount, 0) / Math.max(1, new Set(state.income.map((i) => monthOf(i.date))).size);
     const thirds = [0, 0, 0];
@@ -327,7 +329,7 @@
     const r = state.settings.vatRate / 100; if (!state.settings.licensed) return 0;
     const months = [addMonths(end, -1), end];
     const out = months.reduce((s, m) => {
-      const bank = state.bankCredits.filter((c) => monthOf(c.date) === m && !isTransferIn(c.desc)).reduce((a, c) => a + c.amount, 0);
+      const bank = state.bankCredits.filter((c) => monthOf(c.date) === m && !isInternal(c)).reduce((a, c) => a + c.amount, 0);
       const g = bank || state.income.filter((i) => monthOf(i.date) === m).reduce((a, i) => a + i.amount, 0);
       return s + (g || incomeAvg) * r / (1 + r);
     }, 0);
@@ -417,6 +419,169 @@
       covers: available >= cs.target };
   }
 
+
+  // ---------- smart layer: insights, attention list, monthly summary ----------
+  const plain = (html) => String(html).replace(/<[^>]+>/g, "").replace(/[⁦⁩]/g, "").replace(/\s+/g, " ").trim();
+  const monthsWithSpend = () => [...new Set(state.variable.map((e) => monthOf(e.date)))].sort();
+  function catTotals(m) {
+    const t = {};
+    monthExpenses(m).all.filter((e) => groupOf(e.category) !== "skip").forEach((e) => { t[e.category] = (t[e.category] || 0) + e.amount; });
+    return t;
+  }
+  function merchantTotals(m) {
+    const t = {};
+    state.variable.filter((e) => monthOf(e.date) === m && !e.inst).forEach((e) => { t[e.name] = (t[e.name] || 0) + e.amount; });
+    return t;
+  }
+  const lastIncomeDate = (m) => state.income.filter((i) => monthOf(i.date) === m).map((i) => i.date).sort().pop();
+
+  function smartInsights(m) {
+    const out = [];
+    const r = moneyFlow(m), c = calc(m), g = state.goals[m];
+    const isCurrent = m === monthOf(todayISO());
+    const prev = monthsWithSpend().filter((x) => x < m).slice(-3);
+    const per100 = (v) => (r.gross ? Math.round((v / r.gross) * 100) : 0);
+
+    // 1. pace towards the goal (current month only)
+    const lastInc = lastIncomeDate(m);
+    if (isCurrent && g && g.goal && lastInc && dayOf(lastInc) >= 5) {
+      const proj = (r.gross / dayOf(lastInc)) * daysIn(m);
+      const diff = proj - g.goal;
+      out.push(diff >= 0
+        ? { tone: "good", score: 900, title: "בקצב הזה היעד בהישג יד", text: `לפי הקצב עד ${fmtDay(lastInc)}, החודש ייסגר בכ-<b>${fmt(proj)}</b>, מעל היעד של ${fmt(g.goal)}.` }
+        : { tone: "warn", score: 900, title: "הקצב מתחת ליעד", text: `לפי הקצב עד ${fmtDay(lastInc)}, החודש ייסגר בכ-<b>${fmt(proj)}</b>. זה ${fmt(-diff)} פחות מהיעד של ${fmt(g.goal)}.${g.remaining ? ` כדי להגיע ליעד צריך כ-<b>${fmt(Math.max(0, g.goal - r.gross) / g.remaining)}</b> בכל אחד מ-${g.remaining} ימי העבודה שנשארו.` : ""}` });
+    }
+
+    // 2. income vs. previous months (closed months only)
+    const prevInc = prev.map((x) => state.income.filter((i) => monthOf(i.date) === x).reduce((a, i) => a + i.amount, 0)).filter(Boolean);
+    if (!isCurrent && r.gross && prevInc.length) {
+      const avg = prevInc.reduce((a, b) => a + b, 0) / prevInc.length, ch = r.gross / avg - 1;
+      if (ch >= 0.08) out.push({ tone: "good", score: 500, title: "חודש חזק", text: `ההכנסות גבוהות ב-${Math.round(ch * 100)}% מהממוצע של החודשים הקודמים (${fmt(avg)}).` });
+      if (ch <= -0.08) out.push({ tone: "warn", score: 500, title: "הכנסות נמוכות מהרגיל", text: `ההכנסות נמוכות ב-${Math.round(-ch * 100)}% מהממוצע של החודשים הקודמים (${fmt(avg)}).` });
+    }
+
+    // 3. categories that jumped or dropped
+    if (prev.length) {
+      const explained = new Set();
+      const REGULAR = ["הנהלת חשבונות", "תוכנה ותקשורת", "ביטוח ורישוי", "עמלות בנק ואשראי", "שכירות", "ביטוח אישי"];
+      const curM0 = merchantTotals(m), histM0 = prev.map(merchantTotals);
+      const catOf = (name) => (state.variable.find((e) => e.name === name) || {}).category;
+      Object.entries(curM0).forEach(([name, amt]) => {
+        const cat = catOf(name); if (!REGULAR.includes(cat)) return;
+        const seen = histM0.map((h) => h[name]).filter(Boolean); if (!seen.length) return;
+        const usual = median(seen);
+        if (amt > usual * 1.25 && amt - usual >= 100) { explained.add(cat); out.push({ tone: "warn", score: (amt - usual) * 1.5, title: "חיוב קבוע שהשתנה", text: `<b>${esc(name)}</b>: ${fmt(amt)} החודש, במקום ${fmt(usual)} בדרך כלל. כדאי לבדוק למה.` }); }
+      });
+      const cur = catTotals(m), hist = prev.map(catTotals);
+      Object.keys({ ...cur, ...Object.assign({}, ...hist) }).forEach((cat) => {
+        if (["לא מסווג"].includes(cat) || explained.has(cat) || ["vat", "tax", "private", "skip", "unknown", "loan"].includes(groupOf(cat))) return;
+        const now = cur[cat] || 0, avg = hist.reduce((a, h) => a + (h[cat] || 0), 0) / hist.length;
+        if (avg > 0 && now > avg * 1.35 && now - avg >= 400)
+          out.push({ tone: "warn", score: now - avg, title: `${cat}: יותר מהרגיל`, text: `${fmt(now)} החודש, לעומת ממוצע של ${fmt(avg)}. זה ${Math.round((now / avg - 1) * 100)}% יותר.` });
+        if (!isCurrent && avg >= 400 && now < avg * 0.65)
+          out.push({ tone: "good", score: (avg - now) / 2, title: `${cat}: פחות מהרגיל`, text: `${fmt(now)} החודש, לעומת ממוצע של ${fmt(avg)}.` });
+      });
+      // 4. new suppliers
+      const known = new Set(state.variable.filter((e) => monthOf(e.date) < m).map((e) => e.name));
+      state.variable.filter((e) => monthOf(e.date) === m && !known.has(e.name) && groupOf(e.category) === "biz").forEach((e) => {
+        const total = e.inst ? e.amount * e.inst.t : e.amount;
+        if (total >= 1000) out.push({ tone: "info", score: total / 4, title: "רכישה חדשה מספק", text: `<b>${esc(e.name)}</b>: ${e.inst ? `${fmt(total)} ב-${e.inst.t} תשלומים של ${fmt(e.amount)}` : fmt(total)}. כדאי לוודא שהמלאי הקיים באמת נגמר.` });
+      });
+    }
+
+    // 5. the money that is not hers, and her own pay
+    const groups = {}; r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
+    const notMine = (groups.vat || 0) + (groups.tax || 0);
+    if (notMine) out.push({ tone: "info", score: 300, title: "כסף שנכנס אבל הוא לא שלך", text: `<b>${fmt(notMine)}</b> (${per100(notMine)} ₪ מכל 100 ₪) הלכו למע"מ ולביטוח לאומי. מכל הכנסה כדאי להעביר מיד כ-15% לחשבון נפרד.` });
+    const sumCat = (cat) => monthExpenses(m).all.filter((e) => e.category === cat).reduce((a, e) => a + e.amount, 0);
+    const draw = sumCat("משיכה פרטית"), pension = sumCat("פנסיה וגמל"), smalls = sumCat("קניות אישיות");
+    if (draw) out.push({ tone: "info", score: 250, title: "המשכורת שלך החודש", text: `העברת לעצמך <b>${fmt(draw)}</b>${pension ? `, ועוד ${fmt(pension)} לפנסיה ולגמל` : ""}. משכורת קבועה במועד קבוע תעזור להרגיש את הכסף.` });
+    if (smalls >= 100) out.push({ tone: "info", score: 120, title: "קניות קטנות בכרטיס העסקי", text: `קפה, אוכל וקניות קטנות: <b>${fmt(smalls)}</b>. כרטיס פרטי נפרד ישאיר את העסק נקי.` });
+    if (r.unknownCount) out.push({ tone: "warn", score: 200, title: "תנועות שלא סווגו", text: `<b>${r.unknownCount}</b> תנועות מחכות לסיווג במסך הייבוא.` });
+    if (g && g.goal && r.gross >= g.goal) out.push({ tone: "good", score: 1000, title: "היעד הושג", text: `נכנסו ${fmt(r.gross)}, מעל היעד של ${fmt(g.goal)}.` });
+    if (r.hasDemo) out.push({ tone: "info", score: 1, title: "נתוני דמו", text: `חלק מההוצאות בחודש הזה הן נתוני דמה.` });
+
+    const rank = { warn: 0, good: 1, info: 2 };
+    return out.sort((a, b) => rank[a.tone] - rank[b.tone] || b.score - a.score).slice(0, 7);
+  }
+
+  // Things that need a decision or a missing piece of data.
+  function attentionItems() {
+    const items = [];
+    const today = todayISO(), m = monthOf(today);
+    const lastInc = lastIncomeDate(m) || state.income.map((i) => i.date).sort().pop();
+    if (lastInc) {
+      const days = Math.round((new Date(today) - new Date(lastInc)) / 864e5);
+      if (days >= 2) items.push({ who: "both", title: "לעדכן הכנסות", text: `הדיווח האחרון היה על ${fmtDay(lastInc)}, לפני ${days} ימים.`, action: "quick-income", label: "הוספת הכנסה" });
+    }
+    const unk = state.variable.filter((e) => groupOf(e.category) === "unknown");
+    if (unk.length) items.push({ who: "both", title: `${unk.length} תנועות לסיווג`, text: unk.slice(0, 3).map((e) => `${esc(e.name)} ${fmt(e.amount)}`).join(" · "), action: "tab-bank", label: "לסיווג" });
+    state.bankCredits.filter((c) => !c.tag && isTransferIn(c.desc)).forEach((c) => items.push({ who: "advisor", title: `זיכוי של ${fmt(c.amount)} ב-${fmtDay(c.date)}`, text: `"${esc(c.desc)}": האם זו הכנסה ממכירות, או כסף שהעברת לעצמך?`, credit: c.id }));
+    if (role === "advisor") {
+      const cs = cashSettings(), miss = [];
+      if (cs.limit == null) miss.push("מסגרת מינוס"); if (cs.receipts == null) miss.push("תקבולים ודאיים"); if (cs.inputVat == null) miss.push("מע\"מ תשומות מרו\"ח");
+      if (miss.length) items.push({ who: "advisor", title: "בדיקת המשכורת לא הושלמה", text: `חסר: ${miss.join(", ")}.`, action: "tab-cash", label: "למסך התזרים" });
+      const next = addMonths(m, 1);
+      if (!state.goals[m]) items.push({ who: "advisor", title: `לא נקבע יעד ל${monthName(m)}`, text: "קובעים יעד בהגדרות.", action: "tab-settings", label: "להגדרות" });
+      else if (dayOf(today) >= 20 && !state.goals[next]) items.push({ who: "advisor", title: `יעד ל${monthName(next)}`, text: "החודש מתקרב לסופו. כדאי לקבוע כבר עכשיו את היעד לחודש הבא.", action: "tab-settings", label: "להגדרות" });
+    }
+    return items.filter((i) => i.who === "both" || role === "advisor");
+  }
+
+  function monthSummaryText(m) {
+    const r = moneyFlow(m), g = state.goals[m];
+    const ins = smartInsights(m).filter((i) => i.tone !== "info" || /לא שלך/.test(i.title)).slice(0, 2);
+    const groups = {}; r.steps.forEach((s) => { groups[s.group] = (groups[s.group] || 0) + s.amount; });
+    const bizTop = r.steps.filter((s) => s.group === "biz")[0];
+    const line = (s) => plain(s);
+    return [
+      `סיכום ${monthName(m)} · Dana Deri`,
+      ``,
+      `נכנסו: ${line(fmt(r.gross))}${g && g.goal ? ` (${Math.round((r.gross / g.goal) * 100)}% מהיעד של ${line(fmt(g.goal))})` : ""}`,
+      `יצאו: ${line(fmt(r.out))}`,
+      `${!r.hasAccount && r.left > 0 ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר" : m === monthOf(todayISO()) ? "יצא יותר ממה שנכנס עד עכשיו (החודש עוד לא נגמר)" : "חסר"}: ${line(fmt(r.left))}`,
+      (groups.vat || groups.tax) ? `מע"מ וביטוח לאומי: ${line(fmt((groups.vat || 0) + (groups.tax || 0)))}` : "",
+      bizTop ? `ההוצאה הגדולה: ${bizTop.label}, ${line(fmt(bizTop.amount))}` : "",
+      ins.length ? `` : "",
+      ...ins.map((i) => `• ${i.title}: ${plain(i.text)}`),
+    ].filter((x, i, a) => x !== "" || (a[i - 1] && a[i - 1] !== "")).join("\n").trim();
+  }
+
+  function renderInsights(m) {
+    const list = smartInsights(m);
+    $("#flowInsightsWrap").style.display = list.length ? "" : "none";
+    $("#flowInsights").innerHTML = `<div class="insights">${list.map((i) => `
+      <div class="ins ins-${i.tone}"><span class="ins-dot" aria-hidden="true"></span><div><b class="ins-t">${esc(i.title)}</b><p>${i.text}</p></div></div>`).join("")}</div>`;
+  }
+
+  let attOpen = false;
+  function renderAttention() {
+    const all = attentionItems();
+    const items = attOpen ? all : all.slice(0, 3);
+    const el = $("#attention");
+    el.style.display = items.length ? "" : "none";
+    if (!items.length) return;
+    el.innerHTML = `<div class="att-head"><h2>לטיפול</h2><span class="att-count">${all.length}</span></div>
+      <div class="att-list">${items.map((i) => `<div class="att">
+        <div class="att-body"><b>${i.title}</b><span>${i.text}</span></div>
+        ${i.credit ? `<div class="att-actions"><button class="btn small" data-credit="${i.credit}" data-tag="income">הכנסה</button><button class="btn small ghost" data-credit="${i.credit}" data-tag="internal">העברה שלי</button></div>`
+          : i.action ? `<button class="btn small" data-act="${i.action}">${i.label}</button>` : ""}
+      </div>`).join("")}</div>
+      ${all.length > 3 ? `<button class="att-more" id="attMore">${attOpen ? "הצגת פחות" : `הצגת כל ${all.length}`}</button>` : ""}`;
+    const more = $("#attMore"); if (more) more.onclick = () => { attOpen = !attOpen; renderAttention(); };
+  }
+
+  // Count the hero number up from its previous value (state change, not decoration).
+  let heroPrev = null;
+  function animateHero(to) {
+    const el = $(".hero-num"); if (!el) return;
+    const from = heroPrev == null ? to : heroPrev; heroPrev = to;
+    if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) { el.innerHTML = fmt(to); return; }
+    const t0 = performance.now(), dur = 650;
+    const tick = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 4); el.innerHTML = fmt(from + (to - from) * e); if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+
   // ---------- render ----------
   const icon = (id) => `<svg class="i"><use href="#i-${id}"/></svg>`;
   const delBtn = (kind, id) => `<button class="del" data-del="${kind}" data-id="${id}" aria-label="מחיקה">${icon("trash")}</button>`;
@@ -461,6 +626,8 @@
         <div><span>${unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "יצא יותר ממה שנכנס"}</span><b>${fmt(r.left)}</b></div>
       </div>` : ""}
       ${unexplained ? `<p class="hero-note">כדי לדעת לאן הלך כל השאר, צריך את דף העו"ש של החודש.</p>` : partial && r.gross ? `<p class="hero-note">החודש עוד לא נגמר: חלק מההכנסות עוד לא נכנסו, וחלק מההוצאות כבר ירדו.</p>` : ""}`;
+    renderAttention();
+    animateHero(r.gross);
     if (!r.gross) {
       $("#flowBar").innerHTML = ""; $("#flowLegend").innerHTML = "";
       $("#flowList").innerHTML = `<p class="empty">${r.cardTotal ? `בחודש הזה יצאו ${fmt(r.cardTotal)} בכרטיסי האשראי, אבל אין דיווח הכנסות.` : "כשיהיו הכנסות והוצאות, כאן יופיע לאן הלך כל שקל."}</p>`;
@@ -489,23 +656,7 @@
       ${r.steps.map((s) => lrow("", s.group, esc(s.label), -s.amount, s.estimate ? ' <span class="tag">הערכה</span>' : "")).join("")}
       ${lrow("end", null, unexplained ? "עוד לא ידוע לאן" : r.left >= 0 ? "נשאר לך" : "חסר", r.left)}
     </div>`;
-    const notMine = (groups.vat || 0) + (groups.tax || 0);
-    const bizTop = r.steps.filter((s) => s.group === "biz")[0];
-    const tips = [];
-    if (notMine) tips.push(`<b>${fmt(notMine)}</b> (${per100(notMine)} ₪ מכל 100 ₪) הם מע"מ ומסים. הכסף הזה נכנס לחשבון אבל הוא לא שלך. מעבירים אותו לחשבון נפרד ביום שהוא נכנס, וכך מה שנשאר בעו"ש הוא באמת שלך.`);
-    if (bizTop) tips.push(`ההוצאה העסקית הגדולה ביותר היא <b>${esc(bizTop.label)}</b>: ${fmt(bizTop.amount)}, כלומר ${per100(bizTop.amount)} ₪ מכל 100 ₪.`);
-    const { all: monthAll } = monthExpenses(currentMonth);
-    const sumCat = (c) => monthAll.filter((e) => e.category === c).reduce((a, e) => a + e.amount, 0);
-    const toPrivate = sumCat("משיכה פרטית"), pension = sumCat("פנסיה וגמל"), smalls = sumCat("קניות אישיות");
-    if (toPrivate) tips.push(`העברת לעצמך <b>${fmt(toPrivate)}</b>${pension ? `, ועוד <b>${fmt(pension)}</b> לפנסיה ולגמל` : ""}. זה הכסף שלך. הסכום משתנה מחודש לחודש, ולכן קשה להרגיש אותו. משכורת קבועה באותו יום בכל חודש תעשה סדר.`);
-    else if (groups.private) tips.push(`הוצאות אישיות: <b>${fmt(groups.private)}</b>.`);
-    if (smalls) tips.push(`קפה, אוכל וקניות קטנות בכרטיס העסקי: <b>${fmt(smalls)}</b>. כרטיס פרטי נפרד ישאיר את העסק נקי.`);
-    if (g && g.goal && c.gross >= g.goal) tips.push(`היעד של ${fmt(g.goal)} הושג.`);
-    if (r.unknownCount) tips.push(`<b>${r.unknownCount}</b> תנועות עוד לא מסווגות. מסווגים אותן במסך הייבוא.`);
-    if (r.skipped && !r.cardTotal) tips.push(`חיובי כרטיס אשראי בסך <b>${fmt(r.skipped)}</b> לא נספרו כאן, כדי לא לספור אותם פעמיים. כדי לראות לאן הם הלכו, מייבאים את פירוט הכרטיס.`);
-    if (r.hasDemo) tips.push(`<span class="tag demo">דמו</span> חלק מההוצאות בחודש הזה הן נתוני דמה, עד שיגיעו הנתונים האמיתיים.`);
-    $("#flowInsightsWrap").style.display = tips.length ? "" : "none";
-    $("#flowInsights").innerHTML = `<ul class="tips">${tips.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+    renderInsights(currentMonth);
   }
 
   function renderCommitments() {
@@ -742,8 +893,14 @@
     </div>`;
   }
 
+  let expFilter = "";
   function renderExpenses() {
-    const v = state.variable.filter((e) => monthOf(e.date) === currentMonth).sort((a, b) => b.date.localeCompare(a.date));
+    const all = state.variable.filter((e) => monthOf(e.date) === currentMonth && groupOf(e.category) !== "skip").sort((a, b) => b.date.localeCompare(a.date));
+    const cats = {}; all.forEach((e) => { cats[e.category] = (cats[e.category] || 0) + e.amount; });
+    if (expFilter && !cats[expFilter]) expFilter = "";
+    $("#expFilter").innerHTML = Object.keys(cats).length > 1 ? [`<button class="fchip ${!expFilter ? "on" : ""}" data-filter="">הכל</button>`,
+      ...Object.entries(cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<button class="fchip ${expFilter === c ? "on" : ""}" data-filter="${esc(c)}">${esc(c)} <span>${fmt(v)}</span></button>`)].join("") : "";
+    const v = expFilter ? all.filter((e) => e.category === expFilter) : all;
     $("#variableList").innerHTML = v.length
       ? `<div class="list">${v.map((e) => expenseItem(e, "variable")).join("")}</div><div class="list-total"><span>סה"כ</span><span>${fmt(v.reduce((s, e) => s + e.amount, 0))}</span></div>`
       : `<p class="empty">אין הוצאות משתנות ב${monthName(currentMonth)}.</p>`;
@@ -1030,6 +1187,35 @@
     });
 
     $$("[data-tab]").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+
+    // attention list actions, credit decisions, expense filter
+    document.addEventListener("click", (e) => {
+      const act = e.target.closest("[data-act]");
+      if (act) { const a = act.dataset.act; if (a === "quick-income") openQuick("income"); else if (a.startsWith("tab-")) showTab(a.slice(4)); return; }
+      const cr = e.target.closest("[data-credit]");
+      if (cr) { const c = state.bankCredits.find((x) => x.id === cr.dataset.credit); if (c) { c.tag = cr.dataset.tag; toast(c.tag === "income" ? "נספר כהכנסה" : "סומן כהעברה שלך, לא נספר כהכנסה"); commit(); } return; }
+      const fc = e.target.closest("[data-filter]");
+      if (fc) { expFilter = fc.dataset.filter; renderExpenses(); }
+    });
+
+    // monthly summary to share
+    $("#shareBtn").addEventListener("click", () => { $("#shareText").value = monthSummaryText(currentMonth); $("#shareDlg").showModal(); });
+    $("#shareClose").addEventListener("click", () => $("#shareDlg").close());
+    $("#shareDlg").addEventListener("click", (e) => { if (e.target.id === "shareDlg") $("#shareDlg").close(); });
+    $("#shareCopy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("#shareText").value); toast("הסיכום הועתק"); }
+      catch (_) { $("#shareText").select(); document.execCommand("copy"); toast("הסיכום הועתק"); }
+    });
+    $("#shareWa").addEventListener("click", () => window.open("https://wa.me/?text=" + encodeURIComponent($("#shareText").value), "_blank", "noopener"));
+
+    // swipe between months on the phone (RTL: swiping right brings the next month)
+    let tx = null, ty = null;
+    $("main").addEventListener("touchstart", (e) => { if (e.target.closest("input,textarea,select,.table-wrap,.chips,svg")) { tx = null; return; } tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+    $("main").addEventListener("touchend", (e) => {
+      if (tx == null) return;
+      const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty; tx = null;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) step(dx > 0 ? 1 : -1);
+    }, { passive: true });
     const step = (d) => { const ms = allMonths(); const i = ms.indexOf(currentMonth) + d; if (ms[i]) { currentMonth = ms[i]; $("#goalForm").month.value = currentMonth; render(); } };
     $("#monthPrev").addEventListener("click", () => step(-1));
     $("#monthNext").addEventListener("click", () => step(1));
